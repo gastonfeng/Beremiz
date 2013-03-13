@@ -433,7 +433,8 @@ class Beremiz(IDEFrame):
         if projectOpen is not None:
             projectOpen = DecodeFileSystemPath(projectOpen, False)
         
-        if ctr is None and projectOpen is None and self.Config.HasEntry("currenteditedproject"):
+        if (self.EnableSaveProjectState() and ctr is None and 
+            projectOpen is None and self.Config.HasEntry("currenteditedproject")):
             try:
                 projectOpen = DecodeFileSystemPath(self.Config.Read("currenteditedproject"))
                 if projectOpen == "":
@@ -877,7 +878,8 @@ class Beremiz(IDEFrame):
                 self.RefreshConfigRecentProjects(projectpath)
                 if self.EnableDebug:
                     self.DebugVariablePanel.SetDataProducer(self.CTR)
-                self.LoadProjectLayout()
+                if self.EnableSaveProjectState():
+                    self.LoadProjectLayout()
                 self._Refresh(PROJECTTREE, POUINSTANCEVARIABLESPANEL, LIBRARYTREE)
             else:
                 self.ResetView()
