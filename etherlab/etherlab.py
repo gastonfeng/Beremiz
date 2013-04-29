@@ -232,9 +232,31 @@ def ExtractPdoInfos(pdo, pdo_type, entries, limits=None):
                         "Access": access,
                         "PDOMapping": pdomapping}
 
-DEFAULT_ALIGNMENT = 8
-
 class ModulesLibrary:
+
+    MODULES_EXTRA_PARAMS = [
+        ("pdo_alignment", {
+            "column_label": _("PDO alignment"), 
+            "column_size": 150,
+            "default": 8,
+            "description": _(
+"Minimal size in bits between 2 pdo entries")}),
+        ("max_pdo_size", {
+            "column_label": _("Max entries by PDO"),
+            "column_size": 150,
+            "default": 255,
+            "description": _(
+"""Maximal number of entries mapped in a PDO
+including empty entries used for PDO alignment""")}),
+        ("add_pdo", {
+            "column_label": _("Creating new PDO"), 
+            "column_size": 150,
+            "default": 0,
+            "description": _(
+"""Adding a PDO not defined in default configuration
+for mapping needed location variables
+(1 if possible)""")})
+    ]
     
     def __init__(self, path, parent_library=None):
         self.Path = path
@@ -246,13 +268,13 @@ class ModulesLibrary:
             self.LoadModules()
         else:
             self.Library = None
-        self.LoadAlignments()
+        self.LoadModulesExtraParams()
     
     def GetPath(self):
         return self.Path
     
-    def GetAlignmentFilePath(self):
-        return os.path.join(self.Path, "alignments.cfg")
+    def GetModulesExtraParamsFilePath(self):
+        return os.path.join(self.Path, "modules_extra_params.cfg")
     
     def LoadModules(self):
         self.Library = {}
@@ -310,14 +332,14 @@ class ModulesLibrary:
                     if profile_filter is None or profile_filter in device.GetProfileNumbers():
                         product_code = device.getType().getProductCode()
                         revision_number = device.getType().getRevisionNo()
-                        alignment = self.GetAlignment(vendor_id, product_code, revision_number)
+                        module_infos = {"device_type": device_type,
+                                        "vendor": vendor_id,
+                                        "product_code": product_code,
+                                        "revision_number": revision_number}
+                        module_infos.update(self.GetModuleExtraParams(vendor_id, product_code, revision_number))
                         device_infos = {"name": ExtractName(device.getName()),
                                         "type": ETHERCAT_DEVICE,
-                                        "infos": {"device_type": device_type,
-                                                  "vendor": vendor_id,
-                                                  "product_code": product_code,
-                                                  "revision_number": revision_number,
-                                                  "alignment": alignment},
+                                        "infos": module_infos,
                                         "children": []}
                         group_infos["children"].append(device_infos)
                         device_type_occurrences = device_dict.setdefault(device_type, [])
@@ -353,7 +375,7 @@ class ModulesLibrary:
                     revision_number = ExtractHexDecValue(device_infos.getType().getRevisionNo())
                     if (product_code == ExtractHexDecValue(module_infos["product_code"]) and
                         revision_number == ExtractHexDecValue(module_infos["revision_number"])):
-                        return device_infos, self.GetAlignment(vendor, product_code, revision_number)
+                        return device_infos, self.GetModuleExtraParams(vendor, product_code, revision_number)
         return None, None
     
     def ImportModuleLibrary(self, filepath):
@@ -363,10 +385,10 @@ class ModulesLibrary:
             return True
         return False
     
-    def LoadAlignments(self):
-        self.Alignments = {}
+    def LoadModulesExtraParams(self):
+        self.ModulesExtraParams = {}
         
-        csvfile_path = self.GetAlignmentFilePath()
+        csvfile_path = self.GetModulesExtraParamsFilePath()
         if os.path.exists(csvfile_path):
             csvfile = open(csvfile_path, "rb")
             sample = csvfile.read(1024)
@@ -378,40 +400,53 @@ class ModulesLibrary:
                 if has_header:
                     has_header = False
                 else:
-                    try:
-                        self.Alignments[tuple(map(int, row[:3]))] = int(row[3])
-                    except:
-                        pass
+                    params_values = {}
+                    for (param, param_infos), value in zip(
+                        self.MODULES_EXTRA_PARAMS, row[3:]):
+                        if value != "":
+                            params_values[param] = int(value)
+                    self.ModulesExtraParams[
+                        tuple(map(int, row[:3]))] = params_values
             csvfile.close()
-        
-    def SaveAlignments(self):
-        csvfile = open(self.GetAlignmentFilePath(), "wb")
+    
+    def SaveModulesExtraParams(self):
+        csvfile = open(self.GetModulesExtraParamsFilePath(), "wb")
+        extra_params = [param for param, params_infos in self.MODULES_EXTRA_PARAMS]
         writer = csv.writer(csvfile, delimiter=';')
-        writer.writerow(['Vendor', 'product_code', 'revision_number', 'alignment'])
-        for (vendor, product_code, revision_number), alignment in self.Alignments.iteritems():
-            writer.writerow([vendor, product_code, revision_number, alignment])
+        writer.writerow(['Vendor', 'product_code', 'revision_number'] + extra_params)
+        for (vendor, product_code, revision_number), module_extra_params in self.ModulesExtraParams.iteritems():
+            writer.writerow([vendor, product_code, revision_number] + 
+                            [module_extra_params.get(param, '') 
+                             for param in extra_params])
         csvfile.close()
     
-    def SetAlignment(self, vendor, product_code, revision_number, alignment):
+    def SetModuleExtraParam(self, vendor, product_code, revision_number, param, value):
         vendor = ExtractHexDecValue(vendor)
         product_code = ExtractHexDecValue(product_code)
         revision_number = ExtractHexDecValue(revision_number)
         
-        self.Alignments[tuple([vendor, product_code, revision_number])] = alignment
-        self.SaveAlignments()
+        module_infos = (vendor, product_code, revision_number)
+        self.ModulesExtraParams.setdefault(module_infos, {})
+        self.ModulesExtraParams[module_infos][param] = value
+        
+        self.SaveModulesExtraParams()
     
-    def GetAlignment(self, vendor, product_code, revision_number):
+    def GetModuleExtraParams(self, vendor, product_code, revision_number):
         vendor = ExtractHexDecValue(vendor)
         product_code = ExtractHexDecValue(product_code)
         revision_number = ExtractHexDecValue(revision_number)
-        
-        alignment = self.Alignments.get(tuple([vendor, product_code, revision_number]))
-        if alignment is not None:
-            return alignment
         
         if self.ParentLibrary is not None:
-            return self.ParentLibrary.GetAlignment(vendor, product_code, revision_number)
-        return DEFAULT_ALIGNMENT
+            extra_params = self.ParentLibrary.GetModuleExtraParams(vendor, product_code, revision_number)
+        else:
+            extra_params = {}
+        
+        extra_params.update(self.ModulesExtraParams.get((vendor, product_code, revision_number), {}))
+        
+        for param, param_infos in self.MODULES_EXTRA_PARAMS:
+            extra_params.setdefault(param, param_infos["default"])
+        
+        return extra_params
 
 USERDATA_DIR = wx.StandardPaths.Get().GetUserDataDir()
 if wx.Platform != '__WXMSW__':

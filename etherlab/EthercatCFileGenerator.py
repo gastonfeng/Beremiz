@@ -201,7 +201,7 @@ class _EthercatCFileGenerator:
             slave_pos = (slave_alias, alias[slave_alias])
             
             # Extract slave device informations
-            device, alignment = self.Controler.GetModuleInfos(type_infos)
+            device, module_extra_params = self.Controler.GetModuleInfos(type_infos)
             if device is not None:
                 
                 # Extract slaves variables to be mapped
@@ -322,6 +322,11 @@ class _EthercatCFileGenerator:
                                 if slave_variables.get((index, subindex), None) is not None:
                                     pdo_mapping_match["matching"] += 1
                         
+                            if pdo.getFixed() != True:
+                                pdo_mapping_match["matching"] += \
+                                    module_extra_params["max_pdo_size"] - \
+                                    pdo_mapping_match["count"]
+                        
                         elif pdo.getMandatory():
                             selected_pdos.append(pdo_index)
                     
@@ -332,7 +337,9 @@ class _EthercatCFileGenerator:
                         if exclusion_scope[0]["matching"] > 0:
                             selected_pdos.append(exclusion_scope[0]["index"])
                             start_excluding_index = 1
-                        excluded_pdos.extend([pdo["index"] for pdo in exclusion_scope[start_excluding_index:] if PdoAssign or not pdo["assigned"]])
+                        excluded_pdos.extend([pdo["index"] 
+                            for pdo in exclusion_scope[start_excluding_index:] 
+                            if PdoAssign or not pdo["assigned"]])
                     
                     for pdo, pdo_type in ([(pdo, "Inputs") for pdo in device.getTxPdo()] +
                                           [(pdo, "Outputs") for pdo in device.getRxPdo()]):
@@ -475,7 +482,7 @@ class _EthercatCFileGenerator:
                                 
                                 if len(dynamic_pdos[pdo_type]["pdos"]) > 0:
                                     pdo = dynamic_pdos[pdo_type]["pdos"][0]
-                                else:
+                                elif module_extra_params["add_pdo"]:
                                     while dynamic_pdos[pdo_type]["current_index"] in pdos_index:
                                         dynamic_pdos[pdo_type]["current_index"] += 1
                                     if dynamic_pdos[pdo_type]["current_index"] >= dynamic_pdos[pdo_type]["max_index"]:
@@ -493,14 +500,16 @@ class _EthercatCFileGenerator:
                                     dynamic_pdos[pdo_type]["sync_manager"]["pdos_number"] += 1
                                     dynamic_pdos[pdo_type]["sync_manager"]["pdos"].append(pdo)
                                     dynamic_pdos[pdo_type]["pdos"].append(pdo)
+                                else:
+                                    break
                                 
                                 pdo["entries"].append("    {0x%(index).4x, 0x%(subindex).2x, %(bitlen)d}, /* %(name)s */" % entry_infos)
-                                if entry_infos["bitlen"] < alignment:
-                                    print (alignment, entry_infos["bitlen"])
-                                    pdo["entries"].append("    {0x0000, 0x00, %d}, /* None */" % (alignment - entry_infos["bitlen"]))
+                                if entry_infos["bitlen"] < module_extra_params["pdo_alignment"]:
+                                    pdo["entries"].append("    {0x0000, 0x00, %d}, /* None */" % (
+                                            module_extra_params["pdo_alignment"] - entry_infos["bitlen"]))
                                 pdo["entries_number"] += 1
                                 
-                                if pdo["entries_number"] == 255:
+                                if pdo["entries_number"] == module_extra_params["max_pdo_size"]:
                                     dynamic_pdos[pdo_type]["pdos"].pop(0)
                     
                     pdo_offset = 0

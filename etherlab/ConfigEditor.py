@@ -984,10 +984,6 @@ class MasterEditor(ConfTreeNodeEditor):
                 maxx / SCROLLBAR_UNIT, maxy / SCROLLBAR_UNIT, posx, posy)
         event.Skip()
     
-def GetModulesTableColnames():
-    _ = lambda x : x
-    return [_("Name"), _("PDO alignment (bits)")]
-
 class LibraryEditorSizer(wx.FlexGridSizer):
     
     def __init__(self, parent, module_library, buttons):
@@ -1046,16 +1042,30 @@ class LibraryEditorSizer(wx.FlexGridSizer):
                     wx.TR_COLUMN_LINES |
                     wx.TR_HIDE_ROOT |
                     wx.TR_FULL_ROW_HIGHLIGHT)
-        self.ModulesGrid.GetMainWindow().Bind(wx.EVT_LEFT_DCLICK,
-            self.OnModulesGridLeftDClick)
+        self.ModulesGrid.GetMainWindow().Bind(wx.EVT_LEFT_DOWN,
+            self.OnModulesGridLeftDown)
+        self.ModulesGrid.Bind(wx.EVT_TREE_BEGIN_LABEL_EDIT,
+            self.OnModulesGridBeginLabelEdit)
+        self.ModulesGrid.Bind(wx.EVT_TREE_END_LABEL_EDIT,
+            self.OnModulesGridEndLabelEdit)
+        self.ModulesGrid.GetHeaderWindow().Bind(wx.EVT_MOTION, 
+            self.OnModulesGridHeaderMotion)
         self.AddWindow(self.ModulesGrid, border=10, 
             flag=wx.GROW|wx.BOTTOM|wx.LEFT|wx.RIGHT)
         
-        for colname, colsize, colalign in zip(GetModulesTableColnames(),
-                                              [400, 150],
-                                              [wx.ALIGN_LEFT, wx.ALIGN_RIGHT]):
-            self.ModulesGrid.AddColumn(_(colname), colsize, colalign)
+        for colname, colsize, colalign in zip(
+                [_("Name")] + [param_infos["column_label"] 
+                               for param, param_infos in 
+                               self.ModuleLibrary.MODULES_EXTRA_PARAMS],
+                [400] + [param_infos["column_size"] 
+                         for param, param_infos in 
+                         self.ModuleLibrary.MODULES_EXTRA_PARAMS],
+                [wx.ALIGN_LEFT] + [wx.ALIGN_RIGHT] * len(self.ModuleLibrary.MODULES_EXTRA_PARAMS)):
+            self.ModulesGrid.AddColumn(_(colname), colsize, colalign, edit=True)
         self.ModulesGrid.SetMainColumn(0)
+        
+        self.CurrentSelectedCol = None
+        self.LastToolTipCol = None
     
     def GetPath(self):
         return self.ModuleLibrary.GetPath()
@@ -1089,7 +1099,10 @@ class LibraryEditorSizer(wx.FlexGridSizer):
                 item = self.ModulesGrid.AppendItem(root, "")
             self.ModulesGrid.SetItemText(item, module["name"], 0)
             if module["infos"] is not None:
-                self.ModulesGrid.SetItemText(item, str(module["infos"]["alignment"]), 1)
+                for param_idx, (param, param_infos) in enumerate(self.ModuleLibrary.MODULES_EXTRA_PARAMS):
+                    self.ModulesGrid.SetItemText(item, 
+                                                 str(module["infos"][param]), 
+                                                 param_idx + 1)
             else:
                 self.ModulesGrid.SetItemBackgroundColour(item, wx.LIGHT_GREY)
             self.ModulesGrid.SetItemPyData(item, module["infos"])
@@ -1143,33 +1156,67 @@ class LibraryEditorSizer(wx.FlexGridSizer):
                 wx.CallAfter(self.RefreshView)
         event.Skip()
     
-    def OnModulesGridLeftDClick(self, event):
+    def OnModulesGridLeftDown(self, event):
         item, flags, col = self.ModulesGrid.HitTest(event.GetPosition())
         if item.IsOk():
             entry_infos = self.ModulesGrid.GetItemPyData(item)
-            if entry_infos is not None and col == 1:
-                dialog = wx.TextEntryDialog(self.ParentWindow, 
-                    _("Set PDO alignment (bits):"),
-                    _("%s PDO alignment") % self.ModulesGrid.GetItemText(item), 
-                    str(entry_infos["alignment"]))
+            if entry_infos is not None and col > 0:
+                self.CurrentSelectedCol = col
+            else:
+                self.CurrentSelectedCol = None
+        else:
+            self.CurrentSelectedCol = None
+        event.Skip()
+
+    def OnModulesGridBeginLabelEdit(self, event):
+        item = event.GetItem()
+        if item.IsOk():
+            entry_infos = self.ModulesGrid.GetItemPyData(item)
+            if entry_infos is not None:
+                event.Skip()
+            else:
+                event.Veto()
+        else:
+            event.Veto()
+
+    def OnModulesGridEndLabelEdit(self, event):
+        item = event.GetItem()
+        if item.IsOk() and self.CurrentSelectedCol is not None:
+            entry_infos = self.ModulesGrid.GetItemPyData(item)
+            if entry_infos is not None and self.CurrentSelectedCol > 0:
+                param, param_infos = self.ModuleLibrary.MODULES_EXTRA_PARAMS[self.CurrentSelectedCol - 1]
+                stripped_column_label = param_infos["column_label"].split('(')[0].strip()
+                try:
+                    self.ModuleLibrary.SetModuleExtraParam(
+                        entry_infos["vendor"],
+                        entry_infos["product_code"],
+                        entry_infos["revision_number"],
+                        param,
+                        int(event.GetLabel()))
+                    wx.CallAfter(self.RefreshModulesGrid)
+                    event.Skip()
+                except ValueError:
+                    message = wx.MessageDialog(self, 
+                        _("Module %s must be an integer!") % stripped_column_label, 
+                        _("Error"), wx.OK|wx.ICON_ERROR)
+                    message.ShowModal()
+                    message.Destroy()
+                    event.Veto()
+            else:
+                event.Veto()
+        else:
+            event.Veto()
                 
-                if dialog.ShowModal() == wx.ID_OK:
-                    try:
-                        self.ModuleLibrary.SetAlignment(
-                            entry_infos["vendor"],
-                            entry_infos["product_code"],
-                            entry_infos["revision_number"],
-                            int(dialog.GetValue()))
-                        wx.CallAfter(self.RefreshModulesGrid)
-                    except ValueError:
-                        message = wx.MessageDialog(self, 
-                            _("Module PDO alignment must be an integer!"), 
-                            _("Error"), wx.OK|wx.ICON_ERROR)
-                        message.ShowModal()
-                        message.Destroy()
-                    
-                dialog.Destroy()
-        
+    def OnModulesGridHeaderMotion(self, event):
+        item, flags, col = self.ModulesGrid.HitTest(event.GetPosition())
+        if col != self.LastToolTipCol and self.LastToolTipCol is not None:
+            self.ModulesGrid.SetToolTip(None)
+            self.LastToolTipCol = None
+        if col > 0:
+            self.LastToolTipCol = col
+            param, param_infos = self.ModuleLibrary.MODULES_EXTRA_PARAMS[col - 1]
+            wx.CallAfter(self.ModulesGrid.SetToolTip,
+                         wx.ToolTip(param_infos["description"]))
         event.Skip()
 
 class DatabaseManagementDialog(wx.Dialog):
