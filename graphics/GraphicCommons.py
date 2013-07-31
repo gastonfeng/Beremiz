@@ -23,11 +23,13 @@
 #Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
 
 import wx
-from time import time as gettime
 from math import *
 from types import *
 import datetime
 from threading import Lock,Timer
+
+from graphics.ToolTipProducer import ToolTipProducer
+from graphics.DebugDataConsumer import DebugDataConsumer
 
 #-------------------------------------------------------------------------------
 #                               Common constants
@@ -101,9 +103,6 @@ SEARCH_RESULT_HIGHLIGHT = (wx.Colour(255, 165, 0), wx.WHITE)
 
 # Define highlight refresh inhibition period in second
 REFRESH_HIGHLIGHT_PERIOD = 0.1
-
-# Define tooltip wait for displaying period in second
-TOOLTIP_WAIT_PERIOD = 0.5
 
 HANDLE_CURSORS = {
     (1, 1) : 2,
@@ -187,468 +186,11 @@ def DirectionChoice(v_base, v_target, dir_target):
         return dir_target
     return v_base
 
-SECOND = 1000000
-MINUTE = 60 * SECOND
-HOUR = 60 * MINUTE
-DAY = 24 * HOUR
-
-def generate_time(value):
-    microseconds = float(value.days * DAY + value.seconds * SECOND + value.microseconds)
-    negative = microseconds < 0
-    microseconds = abs(microseconds)
-    data = "T#"
-    not_null = False
-    if negative:
-        data += "-"
-    for val, format in [(int(microseconds) / DAY, "%dd"),
-                        ((int(microseconds) % DAY) / HOUR, "%dh"),
-                        ((int(microseconds) % HOUR) / MINUTE, "%dm"),
-                        ((int(microseconds) % MINUTE) / SECOND, "%ds")]:
-        if val > 0 or not_null:
-            data += format % val
-            not_null = True
-    data += "%gms" % (microseconds % SECOND / 1000.)
-    return data
-
-def generate_date(value):
-    base_date = datetime.datetime(1970, 1, 1)
-    date = base_date + value 
-    return date.strftime("DATE#%Y-%m-%d")
-
-def generate_datetime(value):
-    base_date = datetime.datetime(1970, 1, 1)
-    date_time = base_date + value 
-    return date_time.strftime("DT#%Y-%m-%d-%H:%M:%S.%f")
-
-def generate_timeofday(value):
-    microseconds = float(value.days * DAY + value.seconds * SECOND + value.microseconds)
-    negative = microseconds < 0
-    microseconds = abs(microseconds)
-    data = "TOD#"
-    for val, format in [(int(microseconds) / HOUR, "%2.2d:"),
-                        ((int(microseconds) % HOUR) / MINUTE, "%2.2d:"),
-                        ((int(microseconds) % MINUTE) / SECOND, "%2.2d."),
-                        (microseconds % SECOND, "%6.6d")]:
-        data += format % val
-    return data
-
-TYPE_TRANSLATOR = {"TIME": generate_time,
-                   "DATE": generate_date,
-                   "DT": generate_datetime,
-                   "TOD": generate_timeofday}
-
 def MiterPen(colour, width=1, style=wx.SOLID):
     pen = wx.Pen(colour, width, style)
     pen.SetJoin(wx.JOIN_MITER)
     pen.SetCap(wx.CAP_PROJECTING)
     return pen
-
-#-------------------------------------------------------------------------------
-#                            Debug Data Consumer Class
-#-------------------------------------------------------------------------------
-
-class DebugDataConsumer:
-    
-    def __init__(self):
-        self.LastValue = None
-        self.Value = None
-        self.DataType = None
-        self.LastForced = False
-        self.Forced = False
-        self.Inhibited = False
-    
-    def Inhibit(self, inhibit):
-        self.Inhibited = inhibit
-        if not inhibit and self.LastValue is not None:
-            self.SetForced(self.LastForced)
-            self.SetValue(self.LastValue)
-            self.LastValue = None
-    
-    def SetDataType(self, data_type):
-        self.DataType = data_type
-    
-    def NewValue(self, tick, value, forced=False):
-        value = TYPE_TRANSLATOR.get(self.DataType, lambda x:x)(value)
-        if self.Inhibited:
-            self.LastValue = value
-            self.LastForced = forced
-        else:
-            self.SetForced(forced)
-            self.SetValue(value)
-    
-    def SetValue(self, value):
-        self.Value = value
-    
-    def GetValue(self):
-        return self.Value
-    
-    def SetForced(self, forced):
-        self.Forced = forced
-    
-    def IsForced(self):
-        return self.Forced
-
-#-------------------------------------------------------------------------------
-#                               Debug Viewer Class
-#-------------------------------------------------------------------------------
-
-REFRESH_PERIOD = 0.1
-DEBUG_REFRESH_LOCK = Lock()
-
-class DebugViewer:
-    
-    def __init__(self, producer, debug, register_tick=True):
-        self.DataProducer = None
-        self.Debug = debug
-        self.RegisterTick = register_tick
-        self.Inhibited = False
-        
-        self.DataConsumers = {}
-        
-        self.LastRefreshTime = gettime()
-        self.HasAcquiredLock = False
-        self.AccessLock = Lock()
-        self.TimerAccessLock = Lock()
-        
-        self.LastRefreshTimer = None
-        
-        self.SetDataProducer(producer)
-        
-    def __del__(self):
-        self.DataProducer = None
-        self.DeleteDataConsumers()
-        if self.LastRefreshTimer is not None:
-            self.LastRefreshTimer.Stop()
-        if self.HasAcquiredLock:
-            DEBUG_REFRESH_LOCK.release()
-    
-    def SetDataProducer(self, producer):
-        if self.RegisterTick and self.Debug:
-            if producer is not None:
-                producer.SubscribeDebugIECVariable("__tick__", self)
-            if self.DataProducer is not None:
-                self.DataProducer.UnsubscribeDebugIECVariable("__tick__", self)        
-        self.DataProducer = producer
-    
-    def IsDebugging(self):
-        return self.Debug
-    
-    def Inhibit(self, inhibit):
-        for consumer, iec_path in self.DataConsumers.iteritems():
-            consumer.Inhibit(inhibit)
-        self.Inhibited = inhibit
-    
-    def AddDataConsumer(self, iec_path, consumer):
-        if self.DataProducer is None:
-            return None
-        result = self.DataProducer.SubscribeDebugIECVariable(iec_path, consumer)
-        if result is not None and consumer != self:
-            self.DataConsumers[consumer] = iec_path
-            consumer.SetDataType(self.GetDataType(iec_path))
-        return result
-    
-    def RemoveDataConsumer(self, consumer):
-        iec_path = self.DataConsumers.pop(consumer, None)
-        if iec_path is not None:
-            self.DataProducer.UnsubscribeDebugIECVariable(iec_path, consumer)
-    
-    def RegisterVariables(self):
-        pass
-    
-    def GetDataType(self, iec_path):
-        if self.DataProducer is not None:
-            infos = self.DataProducer.GetInstanceInfos(iec_path)
-            if infos is not None:
-                return infos["type"]
-            return self.DataProducer.GetDebugIECVariableType(iec_path.upper())
-        return None
-    
-    def IsNumType(self, data_type):
-        return self.DataProducer.IsNumType(data_type)
-    
-    def ForceDataValue(self, iec_path, value):
-        if self.DataProducer is not None:
-            self.DataProducer.ForceDebugIECVariable(iec_path, value)
-    
-    def ReleaseDataValue(self, iec_path):
-        if self.DataProducer is not None:
-            self.DataProducer.ReleaseDebugIECVariable(iec_path)
-    
-    def DeleteDataConsumers(self):
-        if self.DataProducer is not None:
-            for consumer, iec_path in self.DataConsumers.iteritems():
-                self.DataProducer.UnsubscribeDebugIECVariable(iec_path, consumer)
-        self.DataConsumers = {}
-    
-    def ShouldRefresh(self):
-        if self:
-            wx.CallAfter(self._ShouldRefresh)
-        
-    def _ShouldRefresh(self):
-        if self:
-            if DEBUG_REFRESH_LOCK.acquire(False):
-                self.AccessLock.acquire()
-                self.HasAcquiredLock = True
-                self.AccessLock.release()
-                self.RefreshNewData()
-            else:
-                self.TimerAccessLock.acquire()
-                self.LastRefreshTimer = Timer(REFRESH_PERIOD, self.ShouldRefresh)
-                self.LastRefreshTimer.start()
-                self.TimerAccessLock.release()
-    
-    def NewDataAvailable(self, tick, *args, **kwargs):
-        self.TimerAccessLock.acquire()
-        if self.LastRefreshTimer is not None:
-            self.LastRefreshTimer.cancel()
-            self.LastRefreshTimer=None
-        self.TimerAccessLock.release()
-        if self.IsShown() and not self.Inhibited:
-            if gettime() - self.LastRefreshTime > REFRESH_PERIOD and DEBUG_REFRESH_LOCK.acquire(False):
-                self.AccessLock.acquire()
-                self.HasAcquiredLock = True
-                self.AccessLock.release()
-                self.LastRefreshTime = gettime()
-                self.Inhibit(True)
-                wx.CallAfter(self.RefreshViewOnNewData, *args, **kwargs)
-            else:
-                self.TimerAccessLock.acquire()
-                self.LastRefreshTimer = Timer(REFRESH_PERIOD, self.ShouldRefresh)
-                self.LastRefreshTimer.start()
-                self.TimerAccessLock.release()
-        elif not self.IsShown() and self.HasAcquiredLock:
-            DebugViewer.RefreshNewData(self)
-            
-    def RefreshViewOnNewData(self, *args, **kwargs):
-        if self:
-            self.RefreshNewData(*args, **kwargs)
-    
-    def RefreshNewData(self, *args, **kwargs):
-        self.Inhibit(False)
-        self.AccessLock.acquire()
-        if self.HasAcquiredLock:
-            DEBUG_REFRESH_LOCK.release()
-            self.HasAcquiredLock = False
-        if gettime() - self.LastRefreshTime > REFRESH_PERIOD:
-            self.LastRefreshTime = gettime()
-        self.AccessLock.release()
-
-#-------------------------------------------------------------------------------
-#                               Viewer Rubberband
-#-------------------------------------------------------------------------------
-
-"""
-Class that implements a rubberband
-"""
-
-class RubberBand:
-    
-    # Create a rubberband by indicated on which window it must be drawn
-    def __init__(self, viewer):
-        self.Viewer = viewer
-        self.drawingSurface = viewer.Editor
-        self.Reset()
-    
-    # Method that initializes the internal attributes of the rubberband
-    def Reset(self):
-        self.startPoint = None
-        self.currentBox = None
-        self.lastBox = None
-    
-    # Method that return if a box is currently edited
-    def IsShown(self):
-        return self.currentBox != None
-    
-    # Method that returns the currently edited box
-    def GetCurrentExtent(self):
-        if self.currentBox is None:
-            return self.lastBox
-        return self.currentBox
-    
-    # Method called when a new box starts to be edited
-    def OnLeftDown(self, event, dc, scaling):
-        pos = GetScaledEventPosition(event, dc, scaling)
-        # Save the point for calculate the box position and size
-        self.startPoint = pos
-        self.currentBox = wx.Rect(pos.x, pos.y, 0, 0)
-        self.drawingSurface.SetCursor(wx.StockCursor(wx.CURSOR_CROSS))
-        self.Redraw()
-    
-    # Method called when dragging with a box edited
-    def OnMotion(self, event, dc, scaling):
-        pos = GetScaledEventPosition(event, dc, scaling)
-        # Save the last position and size of the box for erasing it
-        self.lastBox = wx.Rect(self.currentBox.x, self.currentBox.y, self.currentBox.width,
-            self.currentBox.height)
-        # Calculate new position and size of the box 
-        if pos.x >= self.startPoint.x:
-            self.currentBox.x = self.startPoint.x
-            self.currentBox.width = pos.x - self.startPoint.x + 1
-        else:
-            self.currentBox.x = pos.x
-            self.currentBox.width = self.startPoint.x - pos.x + 1
-        if pos.y >= self.startPoint.y:
-            self.currentBox.y = self.startPoint.y
-            self.currentBox.height = pos.y - self.startPoint.y + 1
-        else:
-            self.currentBox.y = pos.y
-            self.currentBox.height = self.startPoint.y - pos.y + 1
-        self.Redraw()
-    
-    # Method called when dragging is stopped
-    def OnLeftUp(self, event, dc, scaling):
-        self.drawingSurface.SetCursor(wx.NullCursor)
-        self.lastBox = self.currentBox
-        self.currentBox = None
-        self.Redraw()
-
-    # Method that erase the last box and draw the new box
-    def Redraw(self, dc = None):
-        if dc is None:
-            dc = self.Viewer.GetLogicalDC()
-        scalex, scaley = dc.GetUserScale()
-        dc.SetUserScale(1, 1)
-        dc.SetPen(wx.Pen(wx.WHITE, 1, wx.DOT))
-        dc.SetBrush(wx.TRANSPARENT_BRUSH)
-        dc.SetLogicalFunction(wx.XOR)
-        if self.lastBox:
-            # Erase last box
-            dc.DrawRectangle(self.lastBox.x * scalex, self.lastBox.y * scaley, 
-                             self.lastBox.width * scalex, self.lastBox.height * scaley)
-        if self.currentBox:
-            # Draw current box
-            dc.DrawRectangle(self.currentBox.x * scalex, self.currentBox.y * scaley, 
-                             self.currentBox.width * scalex, self.currentBox.height * scaley)
-        dc.SetUserScale(scalex, scaley)
-    
-    # Erase last box
-    def Erase(self, dc = None):
-        if dc is None:
-            dc = self.Viewer.GetLogicalDC()
-        scalex, scaley = dc.GetUserScale()
-        dc.SetUserScale(1, 1)
-        dc.SetPen(wx.Pen(wx.WHITE, 1, wx.DOT))
-        dc.SetBrush(wx.TRANSPARENT_BRUSH)
-        dc.SetLogicalFunction(wx.XOR)
-        if self.lastBox:
-            dc.DrawRectangle(self.lastBox.x * scalex, self.lastBox.y * scaley, 
-                             self.lastBox.width * scalex, self.lastBox.height * scalex)
-        dc.SetUserScale(scalex, scaley)
-
-    # Draw current box
-    def Draw(self, dc = None):
-        if dc is None:
-            dc = self.Viewer.GetLogicalDC()
-        scalex, scaley = dc.GetUserScale()
-        dc.SetUserScale(1, 1)
-        dc.SetPen(wx.Pen(wx.WHITE, 1, wx.DOT))
-        dc.SetBrush(wx.TRANSPARENT_BRUSH)
-        dc.SetLogicalFunction(wx.XOR)
-        if self.currentBox:
-            # Draw current box
-            dc.DrawRectangle(self.currentBox.x * scalex, self.currentBox.y * scaley, 
-                             self.currentBox.width * scalex, self.currentBox.height * scaley)
-        dc.SetUserScale(scalex, scaley)
-
-#-------------------------------------------------------------------------------
-#                               Viewer ToolTip
-#-------------------------------------------------------------------------------
-
-"""
-Class that implements a custom tool tip
-"""
-
-if wx.Platform == '__WXMSW__':
-    faces = { 'times': 'Times New Roman',
-              'mono' : 'Courier New',
-              'helv' : 'Arial',
-              'other': 'Comic Sans MS',
-              'size' : 10,
-             }
-else:
-    faces = { 'times': 'Times',
-              'mono' : 'Courier',
-              'helv' : 'Helvetica',
-              'other': 'new century schoolbook',
-              'size' : 12,
-             }
-
-TOOLTIP_MAX_CHARACTERS = 30
-TOOLTIP_MAX_LINE = 5
-
-class ToolTip(wx.PopupWindow):
-    
-    def __init__(self, parent, tip):
-        wx.PopupWindow.__init__(self, parent)
-        
-        self.CurrentPosition = wx.Point(0, 0)
-        
-        self.SetBackgroundStyle(wx.BG_STYLE_CUSTOM)
-        self.SetTip(tip)
-        
-        self.Bind(wx.EVT_PAINT, self.OnPaint)
-        
-    def SetTip(self, tip):
-        lines = []
-        for line in tip.splitlines():
-            if line != "":
-                words = line.split()
-                new_line = words[0]
-                for word in words[1:]:
-                    if len(new_line + " " + word) <= TOOLTIP_MAX_CHARACTERS:
-                        new_line += " " + word
-                    else:
-                        lines.append(new_line)
-                        new_line = word
-                lines.append(new_line)
-            else:
-                lines.append(line)
-        if len(lines) > TOOLTIP_MAX_LINE:
-            self.Tip = lines[:TOOLTIP_MAX_LINE]
-            if len(self.Tip[-1]) < TOOLTIP_MAX_CHARACTERS - 3:
-                self.Tip[-1] += "..."
-            else:
-                self.Tip[-1] = self.Tip[-1][:TOOLTIP_MAX_CHARACTERS - 3] + "..."
-        else:
-            self.Tip = lines
-        wx.CallAfter(self.RefreshTip)
-    
-    def MoveToolTip(self, pos):
-        self.CurrentPosition = pos
-        self.SetPosition(pos)
-    
-    def GetTipExtent(self):
-        max_width = 0
-        max_height = 0
-        for line in self.Tip:
-            w, h = self.GetTextExtent(line)
-            max_width = max(max_width, w)
-            max_height += h
-        return max_width, max_height
-    
-    def RefreshTip(self):
-        if self:
-            w, h = self.GetTipExtent()
-            self.SetSize(wx.Size(w + 4, h + 4))
-            self.SetPosition(self.CurrentPosition)
-            self.Refresh()
-        
-    def OnPaint(self, event):
-        dc = wx.AutoBufferedPaintDC(self)
-        dc.Clear()
-        dc.SetPen(MiterPen(wx.BLACK))
-        dc.SetBrush(wx.Brush(wx.Colour(255, 238, 170)))
-        dc.SetFont(wx.Font(faces["size"], wx.SWISS, wx.NORMAL, wx.NORMAL, faceName = faces["mono"]))
-        dc.BeginDrawing()
-        w, h = self.GetTipExtent()
-        dc.DrawRectangle(0, 0, w + 4, h + 4)
-        offset = 0
-        for line in self.Tip:
-            dc.DrawText(line, 2, offset + 2)
-            w, h = dc.GetTextExtent(line)
-            offset += h
-        dc.EndDrawing()
-        event.Skip()
 
 #-------------------------------------------------------------------------------
 #                    Helpers for highlighting text
@@ -691,10 +233,11 @@ def DrawHighlightedText(dc, text, highlights, x, y):
 Class that implements a generic graphic element
 """
 
-class Graphic_Element:
+class Graphic_Element(ToolTipProducer):
     
     # Create a new graphic element
     def __init__(self, parent, id = None):
+        ToolTipProducer.__init__(self, parent)
         self.Parent = parent
         self.Id = id
         self.oldPos = None
@@ -708,13 +251,6 @@ class Graphic_Element:
         self.Size = wx.Size(0, 0)
         self.BoundingBox = wx.Rect(0, 0, 0, 0)
         self.Visible = False
-        self.ToolTip = None
-        self.ToolTipPos = None
-        self.ToolTipTimer = wx.Timer(self.Parent, -1)
-        self.Parent.Bind(wx.EVT_TIMER, self.OnToolTipTimer, self.ToolTipTimer)
-    
-    def __del__(self):
-        self.ToolTipTimer.Stop()
     
     def GetDefinition(self):
         return [self.Id], []
@@ -968,7 +504,7 @@ class Graphic_Element:
         # If the cursor is dragging and the element have been clicked
         if event.Dragging() and self.oldPos:
             # Calculate the movement of cursor
-            pos = event.GetLogicalPosition(dc)
+            pos = GetScaledEventPosition(event, dc, scaling)
             movex = pos.x - self.oldPos.x
             movey = pos.y - self.oldPos.y
             # If movement is greater than MIN_MOVE then a dragging is initiated
@@ -1086,36 +622,6 @@ class Graphic_Element:
             self.Move(movex, movey)
             return movex, movey
         return 0, 0
-    
-    def OnToolTipTimer(self, event):
-        value = self.GetToolTipValue()
-        if value is not None and self.ToolTipPos is not None:
-            self.ToolTip = ToolTip(self.Parent, value)
-            self.ToolTip.MoveToolTip(self.ToolTipPos)
-            self.ToolTip.Show()
-        
-    def GetToolTipValue(self):
-        return None
-    
-    def CreateToolTip(self, pos):
-        value = self.GetToolTipValue()
-        if value is not None:
-            self.ToolTipPos = pos
-            self.ToolTipTimer.Start(int(TOOLTIP_WAIT_PERIOD * 1000), oneShot=True)
-        
-    def MoveToolTip(self, pos):
-        if self.ToolTip is not None:
-            self.ToolTip.MoveToolTip(pos)
-        elif self.ToolTipPos is not None:
-            self.ToolTipPos = pos
-            self.ToolTipTimer.Start(int(TOOLTIP_WAIT_PERIOD * 1000), oneShot=True)
-    
-    def ClearToolTip(self):
-        self.ToolTipTimer.Stop()
-        self.ToolTipPos = None
-        if self.ToolTip is not None:
-            self.ToolTip.Destroy()
-            self.ToolTip = None
     
     # Override this method for defining the method to call for adding an highlight to this element
     def AddHighlight(self, infos, start, end, highlight_type):
@@ -1347,9 +853,12 @@ class Graphic_Group(Graphic_Element):
                 if movex != 0 or movey != 0:
                     element.Move(movex, movey)
                     element.RefreshModel()
-        self.RefreshWireExclusion()
         self.RefreshBoundingBox()
     
+    # Add the given element to the group of elements
+    def AddElement(self, element):
+        self.Elements.append(element)
+        
     # Remove or select the given element if it is or not in the group
     def SelectElement(self, element):
         if element in self.Elements:
@@ -1480,10 +989,14 @@ class Graphic_Group(Graphic_Element):
         self.Parent.PopupGroupMenu()
 
     # Refreshes the model of all the elements of this group
-    def RefreshModel(self):
+    def RefreshModel(self, move=True):
         for element in self.Elements:
-            element.RefreshModel()
+            element.RefreshModel(move)
 
+    # Draws the handles of this element if it is selected
+    def Draw(self, dc):
+        for element in self.Elements:
+            element.Draw(dc)
 
 #-------------------------------------------------------------------------------
 #                         Connector for all types of blocks
@@ -1493,10 +1006,12 @@ class Graphic_Group(Graphic_Element):
 Class that implements a connector for any type of block
 """
 
-class Connector:
+class Connector(DebugDataConsumer, ToolTipProducer):
     
     # Create a new connector
     def __init__(self, parent, name, type, position, direction, negated = False, edge = "none", onlyone = False):
+        DebugDataConsumer.__init__(self)
+        ToolTipProducer.__init__(self, parent.Parent)
         self.ParentBlock = parent
         self.Name = name
         self.Type = type
@@ -1513,6 +1028,8 @@ class Connector:
         self.Valid = True
         self.Value = None
         self.Forced = False
+        self.ValueSize = None
+        self.ComputedValue = None
         self.Selected = False
         self.Highlights = []
         self.RefreshNameSize()
@@ -1536,7 +1053,18 @@ class Connector:
             height = 5
         else:
             height = CONNECTOR_SIZE
-        return wx.Rect(x - abs(movex), y - abs(movey), width + 2 * abs(movex), height + 2 * abs(movey))
+        rect =  wx.Rect(x - abs(movex), y - abs(movey), width + 2 * abs(movex), height + 2 * abs(movey))
+        if self.ValueSize is None and isinstance(self.ComputedValue, (StringType, UnicodeType)):
+            self.ValueSize = self.ParentBlock.Parent.GetMiniTextExtent(self.ComputedValue)
+        if self.ValueSize is not None:
+            width, height = self.ValueSize
+            rect = rect.Union(wx.Rect(
+                    parent_pos[0] + self.Pos.x + CONNECTOR_SIZE * self.Direction[0] + \
+                                    width * (self.Direction[0] - 1) / 2,
+                    parent_pos[1] + self.Pos.y + CONNECTOR_SIZE * self.Direction[1] + \
+                                    height * (self.Direction[1] - 1),
+                    width, height))
+        return rect
     
     # Change the connector selection
     def SetSelected(self, selected):
@@ -1600,6 +1128,33 @@ class Connector:
         self.Name = name
         self.RefreshNameSize()
 
+    def SetForced(self, forced):
+        if self.Forced != forced:
+            self.Forced = forced
+            if self.Visible:
+                self.Parent.ElementNeedRefresh(self)
+    
+    def GetComputedValue(self):
+        if self.Value is not None and self.Value != "undefined" and not isinstance(self.Value, BooleanType):
+            return self.Value
+        return None
+    
+    def GetToolTipValue(self):
+        return self.GetComputedValue()
+    
+    def SetValue(self, value):
+        if self.Value != value:
+            self.Value = value
+            computed_value = self.GetComputedValue()
+            if computed_value is not None:
+                self.ComputedValue = computed_value
+                self.SetToolTipText(self.ComputedValue)
+                if len(self.ComputedValue) > 4:
+                    self.ComputedValue = self.ComputedValue[:4] + "..."
+            self.ValueSize = None
+            if self.ParentBlock.Visible:
+                self.ParentBlock.Parent.ElementNeedRefresh(self)
+    
     def RefreshForced(self):
         self.Forced = False
         for wire, handle in self.Wires:
@@ -1682,6 +1237,10 @@ class Connector:
     def InsertConnect(self, idx, wire, refresh = True):
         if wire not in self.Wires:
             self.Wires.insert(idx, wire)
+            if wire[1] == 0:
+                wire[0].ConnectStartPoint(None, self)
+            else:
+                wire[0].ConnectEndPoint(None, self)
             if refresh:
                 self.ParentBlock.RefreshModel(False)
     
@@ -1935,6 +1494,21 @@ class Connector:
         if not getattr(dc, "printing", False):
             DrawHighlightedText(dc, self.Name, self.Highlights, xtext, ytext)
 
+        if self.Value is not None and not isinstance(self.Value, BooleanType) and self.Value != "undefined":
+            dc.SetFont(self.ParentBlock.Parent.GetMiniFont())
+            dc.SetTextForeground(wx.NamedColour("purple"))
+            if self.ValueSize is None and isinstance(self.ComputedValue, (StringType, UnicodeType)):
+                self.ValueSize = self.ParentBlock.Parent.GetMiniTextExtent(self.ComputedValue)
+            if self.ValueSize is not None:
+                width, height = self.ValueSize
+                dc.DrawText(self.ComputedValue, 
+                    parent_pos[0] + self.Pos.x + CONNECTOR_SIZE * self.Direction[0] + \
+                                    width * (self.Direction[0] - 1) / 2,
+                    parent_pos[1] + self.Pos.y + CONNECTOR_SIZE * self.Direction[1] + \
+                                    height * (self.Direction[1] - 1))
+            dc.SetFont(self.ParentBlock.Parent.GetFont())
+            dc.SetTextForeground(wx.BLACK)
+
 #-------------------------------------------------------------------------------
 #                           Common Wire Element
 #-------------------------------------------------------------------------------
@@ -1980,17 +1554,6 @@ class Wire(Graphic_Element, DebugDataConsumer):
         self.StartConnected = None
         self.EndConnected = None
     
-    def GetToolTipValue(self):
-        if self.Value is not None and self.Value != "undefined" and not isinstance(self.Value, BooleanType):
-            wire_type = self.GetEndConnectedType()
-            if wire_type == "STRING":
-                return "'%s'"%self.Value
-            elif wire_type == "WSTRING":
-                return "\"%s\""%self.Value
-            else:
-                return str(self.Value)
-        return None
-    
     # Returns the RedrawRect
     def GetRedrawRect(self, movex = 0, movey = 0):
         rect = Graphic_Element.GetRedrawRect(self, movex, movey)
@@ -2022,7 +1585,6 @@ class Wire(Graphic_Element, DebugDataConsumer):
     def Clone(self, parent, connectors = {}, dx = 0, dy = 0):
         start_connector = connectors.get(self.StartConnected, None)
         end_connector = connectors.get(self.EndConnected, None)
-        print self.StartConnected, "=>", start_connector, ",", self.EndConnected, "=>", end_connector
         if start_connector is not None and end_connector is not None:
             wire = Wire(parent)
             wire.SetPoints([(point.x + dx, point.y + dy) for point in self.Points])
@@ -2149,19 +1711,21 @@ class Wire(Graphic_Element, DebugDataConsumer):
             if self.Visible:
                 self.Parent.ElementNeedRefresh(self)
 
+    def GetComputedValue(self):
+        if self.Value is not None and self.Value != "undefined" and not isinstance(self.Value, BooleanType):
+            return self.Value
+        return None
+    
+    def GetToolTipValue(self):
+        return self.GetComputedValue()
+
     def SetValue(self, value):
         if self.Value != value:
             self.Value = value
-            if value is not None and not isinstance(value, BooleanType):
-                wire_type = self.GetEndConnectedType()
-                if wire_type == "STRING":
-                    self.ComputedValue = "'%s'"%value
-                elif wire_type == "WSTRING":
-                    self.ComputedValue = "\"%s\""%value
-                else:
-                    self.ComputedValue = str(value)
-                if self.ToolTip is not None:
-                    self.ToolTip.SetTip(self.ComputedValue)
+            computed_value = self.GetComputedValue()
+            if computed_value is not None:
+                self.ComputedValue = computed_value
+                self.SetToolTipText(self.ComputedValue)
                 if len(self.ComputedValue) > 4:
                     self.ComputedValue = self.ComputedValue[:4] + "..."
             self.ValueSize = None

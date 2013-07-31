@@ -155,6 +155,17 @@ if cls:
         self.text = text
     setattr(cls, "updateElementAddress", updateElementAddress)
     
+    def hasblock(self, block_type):
+        text = self.text.upper()
+        index = text.find(block_type.upper())
+        while index != -1:
+            if (not (index > 0 and (text[index - 1].isalnum() or text[index - 1] == "_")) and 
+                not (index < len(text) - len(block_type) and text[index + len(block_type)] != "(")):
+                return True
+            index = text.find(block_type.upper(), index + len(block_type))
+        return False
+    setattr(cls, "hasblock", hasblock)
+    
     def Search(self, criteria, parent_infos):
         return [(tuple(parent_infos),) + result for result in TestTextElement(self.gettext(), criteria)]
     setattr(cls, "Search", Search)
@@ -489,17 +500,19 @@ if cls:
         self.CustomBlockTypes.append(block_infos)
     setattr(cls, "AddCustomBlockType", AddCustomBlockType)
 
+    def AddElementUsingTreeInstance(self, name, type_infos):
+        typename = type_infos.getname()
+        if not self.ElementUsingTree.has_key(typename):
+            self.ElementUsingTree[typename] = [name]
+        elif name not in self.ElementUsingTree[typename]:
+            self.ElementUsingTree[typename].append(name)
+    setattr(cls, "AddElementUsingTreeInstance", AddElementUsingTreeInstance)
+    
     def RefreshElementUsingTree(self):
         # Reset the tree of user-defined element cross-use
         self.ElementUsingTree = {}
         pous = self.getpous()
         datatypes = self.getdataTypes()
-        # Reference all the user-defined elementu names and initialize the tree of 
-        # user-defined elemnt cross-use
-        elementnames = [datatype.getname() for datatype in datatypes] + \
-                       [pou.getname() for pou in pous]
-        for name in elementnames:
-            self.ElementUsingTree[name] = []
         # Analyze each datatype
         for datatype in datatypes:
             name = datatype.getname()
@@ -511,16 +524,12 @@ if cls:
             elif basetype_content["name"] in ["subrangeSigned", "subrangeUnsigned", "array"]:
                 base_type = basetype_content["value"].baseType.getcontent()
                 if base_type["name"] == "derived":
-                    typename = base_type["value"].getname()
-                    if self.ElementUsingTree.has_key(typename) and name not in self.ElementUsingTree[typename]:
-                        self.ElementUsingTree[typename].append(name)
+                    self.AddElementUsingTreeInstance(name, base_type["value"])
             elif basetype_content["name"] == "struct":
                 for element in basetype_content["value"].getvariable():
                     type_content = element.type.getcontent()
                     if type_content["name"] == "derived":
-                        typename = type_content["value"].getname()
-                        if self.ElementUsingTree.has_key(typename) and name not in self.ElementUsingTree[typename]:
-                            self.ElementUsingTree[typename].append(name)
+                        self.AddElementUsingTreeInstance(name, type_content["value"])
         # Analyze each pou
         for pou in pous:
             name = pou.getname()
@@ -530,9 +539,11 @@ if cls:
                     for var in varlist.getvariable():
                         vartype_content = var.gettype().getcontent()
                         if vartype_content["name"] == "derived":
-                            typename = vartype_content["value"].getname()
-                            if self.ElementUsingTree.has_key(typename) and name not in self.ElementUsingTree[typename]:
-                                self.ElementUsingTree[typename].append(name)
+                            self.AddElementUsingTreeInstance(name, vartype_content["value"])
+            for typename in self.ElementUsingTree.iterkeys():
+                if typename != name and pou.hasblock(block_type=typename) and name not in self.ElementUsingTree[typename]:
+                    self.ElementUsingTree[typename].append(name)
+        
     setattr(cls, "RefreshElementUsingTree", RefreshElementUsingTree)
 
     def GetParentType(self, type):
@@ -840,6 +851,35 @@ def _SearchInConfigurationResource(self, criteria, parent_infos=[]):
 
 cls = PLCOpenClasses.get("configurations_configuration", None)
 if cls:
+    
+    def addglobalVar(self, type, name, location="", description=""):
+        globalvars = self.getglobalVars()
+        if len(globalvars) == 0:
+            globalvars.append(PLCOpenClasses["varList"]())
+        var = PLCOpenClasses["varListPlain_variable"]()
+        var.setname(name)
+        var_type = PLCOpenClasses["dataType"]()
+        if type in [x for x,y in TypeHierarchy_list if not x.startswith("ANY")]:
+            if type == "STRING":
+                var_type.setcontent({"name" : "string", "value" : PLCOpenClasses["elementaryTypes_string"]()})
+            elif type == "WSTRING":
+                var_type.setcontent({"name" : "wstring", "value" : PLCOpenClasses["elementaryTypes_wstring"]()})
+            else:
+                var_type.setcontent({"name" : type, "value" : None})
+        else:
+            derived_type = PLCOpenClasses["derivedTypes_derived"]()
+            derived_type.setname(type)
+            var_type.setcontent({"name" : "derived", "value" : derived_type})
+        var.settype(var_type)
+        if location != "":
+            var.setaddress(location)
+        if description != "":
+            ft = PLCOpenClasses["formattedText"]()
+            ft.settext(description)
+            var.setdocumentation(ft)
+        globalvars[-1].appendvariable(var)
+    setattr(cls, "addglobalVar", addglobalVar)
+    
     def updateElementName(self, old_name, new_name):
         _updateConfigurationResourceElementName(self, old_name, new_name)
         for resource in self.getresource():
@@ -1382,21 +1422,25 @@ if cls:
                     break
     setattr(cls, "removepouVar", removepouVar)
     
-    def hasblock(self, name):
+    def hasblock(self, name=None, block_type=None):
         if self.getbodyType() in ["FBD", "LD", "SFC"]:
             for instance in self.getinstances():
-                if isinstance(instance, PLCOpenClasses["fbdObjects_block"]) and instance.getinstanceName() == name:
+                if (isinstance(instance, PLCOpenClasses["fbdObjects_block"]) and 
+                    (name and instance.getinstanceName() == name or
+                     block_type and instance.gettypeName() == block_type)):
                     return True
             if self.transitions:
                 for transition in self.transitions.gettransition():
-                    result = transition.hasblock(name)
+                    result = transition.hasblock(name, block_type)
                     if result:
                         return result
             if self.actions:
                 for action in self.actions.getaction():
-                    result = action.hasblock(name)
+                    result = action.hasblock(name, block_type)
                     if result:
                         return result
+        elif block_type is not None and len(self.body) > 0:
+            return self.body[0].hasblock(block_type)
         return False
     setattr(cls, "hasblock", hasblock)
     
@@ -1626,6 +1670,24 @@ def settext(self, text):
 def gettext(self):
     return self.body.gettext()
 
+def hasblock(self, name=None, block_type=None):
+    if self.getbodyType() in ["FBD", "LD", "SFC"]:
+        for instance in self.getinstances():
+            if (isinstance(instance, PLCOpenClasses["fbdObjects_block"]) and 
+                (name and instance.getinstanceName() == name or
+                 block_type and instance.gettypeName() == block_type)):
+                return True
+    elif block_type is not None:
+        return self.body.hasblock(block_type)
+    return False
+
+def updateElementName(self, old_name, new_name):
+    self.body.updateElementName(old_name, new_name)
+
+def updateElementAddress(self, address_model, new_leading):
+    self.body.updateElementAddress(address_model, new_leading)
+    
+
 cls = PLCOpenClasses.get("transitions_transition", None)
 if cls:
     setattr(cls, "setbodyType", setbodyType)
@@ -1641,23 +1703,10 @@ if cls:
     setattr(cls, "removeinstance", removeinstance)
     setattr(cls, "settext", settext)
     setattr(cls, "gettext", gettext)
-
-    def updateElementName(self, old_name, new_name):
-        self.body.updateElementName(old_name, new_name)
-    setattr(cls, "updateElementName", updateElementName)
-
-    def updateElementAddress(self, address_model, new_leading):
-        self.body.updateElementAddress(address_model, new_leading)
-    setattr(cls, "updateElementAddress", updateElementAddress)
-
-    def hasblock(self, name):
-        if self.getbodyType() in ["FBD", "LD", "SFC"]:
-            for instance in self.getinstances():
-                if isinstance(instance, PLCOpenClasses["fbdObjects_block"]) and instance.getinstanceName() == name:
-                    return True
-        return False
     setattr(cls, "hasblock", hasblock)
-
+    setattr(cls, "updateElementName", updateElementName)
+    setattr(cls, "updateElementAddress", updateElementAddress)
+    
     def Search(self, criteria, parent_infos):
         search_result = []
         parent_infos = parent_infos[:-1] + ["T::%s::%s" % (parent_infos[-1].split("::")[1], self.getname())]
@@ -1682,23 +1731,10 @@ if cls:
     setattr(cls, "removeinstance", removeinstance)
     setattr(cls, "settext", settext)
     setattr(cls, "gettext", gettext)
-
-    def updateElementName(self, old_name, new_name):
-        self.body.updateElementName(old_name, new_name)
-    setattr(cls, "updateElementName", updateElementName)
-
-    def updateElementAddress(self, address_model, new_leading):
-        self.body.updateElementAddress(address_model, new_leading)
-    setattr(cls, "updateElementAddress", updateElementAddress)
-
-    def hasblock(self, name):
-        if self.getbodyType() in ["FBD", "LD", "SFC"]:
-            for instance in self.getinstances():
-                if isinstance(instance, PLCOpenClasses["fbdObjects_block"]) and instance.getinstanceName() == name:
-                    return True
-        return False
     setattr(cls, "hasblock", hasblock)
-
+    setattr(cls, "updateElementName", updateElementName)
+    setattr(cls, "updateElementAddress", updateElementAddress)
+    
     def Search(self, criteria, parent_infos):
         search_result = []
         parent_infos = parent_infos[:-1] + ["A::%s::%s" % (parent_infos[-1].split("::")[1], self.getname())]
@@ -1711,6 +1747,24 @@ if cls:
 cls = PLCOpenClasses.get("body", None)
 if cls:
     cls.currentExecutionOrderId = 0
+    cls.instances_dict = {}
+    
+    setattr(cls, "_init_", getattr(cls, "__init__"))
+    
+    def __init__(self, *args, **kwargs):
+        self._init_(*args, **kwargs)
+        self.instances_dict = {}
+    setattr(cls, "__init__", __init__)
+    
+    setattr(cls, "_loadXMLTree", getattr(cls, "loadXMLTree"))
+    
+    def loadXMLTree(self, *args, **kwargs):
+        self._loadXMLTree(*args, **kwargs)
+        if self.content["name"] in ["LD","FBD","SFC"]:
+            self.instances_dict = dict(
+                [(element["value"].getlocalId(), element)
+                 for element in self.content["value"].getcontent()])
+    setattr(cls, "loadXMLTree", loadXMLTree)
     
     def resetcurrentExecutionOrderId(self):
         object.__setattr__(self, "currentExecutionOrderId", 0)
@@ -1785,7 +1839,9 @@ if cls:
     
     def appendcontentInstance(self, name, instance):
         if self.content["name"] in ["LD","FBD","SFC"]:
-            self.content["value"].appendcontent({"name" : name, "value" : instance})
+            element = {"name" : name, "value" : instance}
+            self.content["value"].appendcontent(element)
+            self.instances_dict[instance.getlocalId()] = element
         else:
             raise TypeError, _("%s body don't have instances!")%self.content["name"]
     setattr(cls, "appendcontentInstance", appendcontentInstance)
@@ -1802,9 +1858,9 @@ if cls:
 
     def getcontentInstance(self, id):
         if self.content["name"] in ["LD","FBD","SFC"]:
-            for element in self.content["value"].getcontent():
-                if element["value"].getlocalId() == id:
-                    return element["value"]
+            instance = self.instances_dict.get(id, None)
+            if instance is not None:
+                return instance["value"]
             return None
         else:
             raise TypeError, _("%s body don't have instances!")%self.content["name"]
@@ -1812,9 +1868,9 @@ if cls:
     
     def getcontentRandomInstance(self, exclude):
         if self.content["name"] in ["LD","FBD","SFC"]:
-            for element in self.content["value"].getcontent():
-                if element["value"].getlocalId() not in exclude:
-                    return element["value"]
+            ids = self.instances_dict.viewkeys() - exclude
+            if len(ids) > 0:
+                return self.instances_dict[ids.pop()]["value"]
             return None
         else:
             raise TypeError, _("%s body don't have instances!")%self.content["name"]
@@ -1831,15 +1887,10 @@ if cls:
     
     def removecontentInstance(self, id):
         if self.content["name"] in ["LD","FBD","SFC"]:
-            i = 0
-            removed = False
-            elements = self.content["value"].getcontent()
-            while i < len(elements) and not removed:
-                if elements[i]["value"].getlocalId() == id:
-                    self.content["value"].removecontent(i)
-                    removed = True
-                i += 1
-            if not removed:
+            element = self.instances_dict.pop(id, None)
+            if element is not None:
+                self.content["value"].getcontent().remove(element)
+            else:
                 raise ValueError, _("Instance with id %d doesn't exist!")%id
         else:
             raise TypeError, "%s body don't have instances!"%self.content["name"]
@@ -1858,6 +1909,13 @@ if cls:
         else:
             raise TypeError, _("%s body don't have text!")%self.content["name"]
     setattr(cls, "gettext", gettext)
+    
+    def hasblock(self, block_type):
+        if self.content["name"] in ["IL","ST"]:
+            return self.content["value"].hasblock(block_type)
+        else:
+            raise TypeError, _("%s body don't have text!")%self.content["name"]
+    setattr(cls, "hasblock", hasblock)
     
     def updateElementName(self, old_name, new_name):
         if self.content["name"] in ["IL", "ST"]:

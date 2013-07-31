@@ -34,9 +34,8 @@ class ProjectNodeEditor(ConfTreeNodeEditor):
         ConfTreeNodeEditor.__init__(self, parent, controler, window, tagname)
         
         buttons_sizer = self.GenerateMethodButtonSizer()
-        self.ParamsEditorSizer.InsertSizer(0, buttons_sizer, 0, border=5, 
-                flag=wx.LEFT|wx.RIGHT|wx.TOP)
-        self.ParamsEditorSizer.Layout()
+        self.MainSizer.InsertSizer(0, buttons_sizer, 0, border=5, flag=wx.ALL)
+        self.MainSizer.Layout()
         
         self.VariableEditor = self.VariableEditorPanel
 
@@ -56,9 +55,8 @@ class ProjectNodeEditor(ConfTreeNodeEditor):
     
     def RefreshView(self, variablepanel=True):
         ConfTreeNodeEditor.RefreshView(self)
-        if variablepanel:
-            self.VariableEditor.RefreshView()
-        #self.ProjectProperties.RefreshView()
+        self.VariableEditorPanel.RefreshView()
+        self.ProjectProperties.RefreshView()
 
     def GetBufferState(self):
         return self.Controler.GetBufferState()

@@ -266,8 +266,8 @@ class PLCControler:
             return [config.getname() for config in project.getconfigurations()]
         return []
     
-    # Return project pou variables
-    def GetProjectPouVariables(self, pou_name = None, debug = False):
+    # Return project pou variable names
+    def GetProjectPouVariableNames(self, pou_name = None, debug = False):
         variables = []
         project = self.GetProject(debug)
         if project is not None:
@@ -561,7 +561,7 @@ class PLCControler:
                         instances.append(var_path)
                     else:
                         pou = project.getpou(var_type)
-                        if pou is not None:
+                        if pou is not None and project.ElementIsUsedBy(pou_type, var_type):
                             instances.extend(
                                 self.RecursiveSearchPouInstances(
                                     project, pou_type, var_path, 
@@ -596,7 +596,7 @@ class PLCControler:
                             if pou_type == words[1]:
                                 instances.append(pou_path)
                             pou = project.getpou(pou_type)
-                            if pou is not None:
+                            if pou is not None and project.ElementIsUsedBy(words[1], pou_type):
                                 instances.extend(
                                     self.RecursiveSearchPouInstances(
                                         project, words[1], pou_path, 
@@ -649,14 +649,38 @@ class PLCControler:
                         return self.RecursiveGetPouInstanceTagName(project, vartype, parts[1:], debug)
         return None
     
+    def GetGlobalInstanceTagName(self, project, element, parts, debug = False):
+        for varlist in element.getglobalVars():
+            for variable in varlist.getvariable():
+                if variable.getname() == parts[0]:
+                    vartype_content = variable.gettype().getcontent()
+                    if vartype_content["name"] == "derived":                        
+                        if len(parts) == 1:
+                            return self.ComputePouName(
+                                        vartype_content["value"].getname())
+                        else:
+                            return self.RecursiveGetPouInstanceTagName(
+                                        project, 
+                                        vartype_content["value"].getname(),
+                                        parts[1:], debug)
+        return None
+    
     def GetPouInstanceTagName(self, instance_path, debug = False):
+        project = self.GetProject(debug)
         parts = instance_path.split(".")
         if len(parts) == 1:
             return self.ComputeConfigurationName(parts[0])
         elif len(parts) == 2:
+            for config in project.getconfigurations():
+                if config.getname() == parts[0]:
+                    result = self.GetGlobalInstanceTagName(project, 
+                                                           config, 
+                                                           parts[1:],
+                                                           debug)
+                    if result is not None:
+                        return result
             return self.ComputeConfigurationResourceName(parts[0], parts[1])
         else:
-            project = self.GetProject(debug)
             for config in project.getconfigurations():
                 if config.getname() == parts[0]:
                     for resource in config.getresource():
@@ -674,6 +698,14 @@ class PLCControler:
                                                     project,
                                                     pou_instance.gettypeName(),
                                                     parts[3:], debug)
+                            return self.GetGlobalInstanceTagName(project, 
+                                                                 resource, 
+                                                                 parts[2:], 
+                                                                 debug)
+                    return self.GetGlobalInstanceTagName(project, 
+                                                         config, 
+                                                         parts[1:],
+                                                         debug)
         return None
     
     def GetInstanceInfos(self, instance_path, debug = False):
@@ -1261,6 +1293,16 @@ class PLCControler:
             tempvar["Documentation"] = ""
 
         return tempvar
+    
+    # Add a global var to configuration to configuration
+    def AddConfigurationGlobalVar(self, config_name, type, var_name, 
+                                           location="", description=""):
+        if self.Project is not None:
+            # Found the configuration corresponding to name
+            configuration = self.Project.getconfiguration(config_name)
+            if configuration is not None:
+                # Set configuration global vars
+                configuration.addglobalVar(type, var_name, location, description)
 
     # Replace the configuration globalvars by those given
     def SetConfigurationGlobalVars(self, name, vars):
@@ -1289,6 +1331,20 @@ class PLCControler:
                         vars.append(tempvar)
         return vars
 
+    # Return configuration variable names
+    def GetConfigurationVariableNames(self, config_name = None, debug = False):
+        variables = []
+        project = self.GetProject(debug)
+        if project is not None:
+            for configuration in self.Project.getconfigurations():
+                if config_name is None or config_name == configuration.getname():
+                    variables.extend(
+                        [var.getname() for var in reduce(
+                            lambda x, y: x + y, [varlist.getvariable() 
+                                for varlist in configuration.globalVars],
+                            [])])
+        return variables
+
     # Replace the resource globalvars by those given
     def SetConfigurationResourceGlobalVars(self, config_name, name, vars):
         if self.Project is not None:
@@ -1315,6 +1371,23 @@ class PLCControler:
                         tempvar["Class"] = "Global"
                         vars.append(tempvar)
         return vars
+    
+    # Return resource variable names
+    def GetConfigurationResourceVariableNames(self, 
+                config_name = None, resource_name = None, debug = False):
+        variables = []
+        project = self.GetProject(debug)
+        if project is not None:
+            for configuration in self.Project.getconfigurations():
+                if config_name is None or config_name == configuration.getname():
+                    for resource in configuration.getresource():
+                        if resource_name is None or resource.getname() == resource_name:
+                            variables.extend(
+                                [var.getname() for var in reduce(
+                                    lambda x, y: x + y, [varlist.getvariable() 
+                                        for varlist in resource.globalVars],
+                                    [])])
+        return variables
     
     # Recursively generate element name tree for a structured variable
     def GenerateVarTree(self, typename, debug = False):
@@ -1492,23 +1565,28 @@ class PLCControler:
 
     def GetConfigurationExtraVariables(self):
         global_vars = []
-        for var_name, var_type in self.GetConfNodeGlobalInstances():
+        for var_name, var_type, var_initial in self.GetConfNodeGlobalInstances():
             tempvar = plcopen.varListPlain_variable()
             tempvar.setname(var_name)
             
             tempvartype = plcopen.dataType()
             if var_type in self.GetBaseTypes():
                 if var_type == "STRING":
-                    var_type.setcontent({"name" : "string", "value" : plcopen.elementaryTypes_string()})
+                    tempvartype.setcontent({"name" : "string", "value" : plcopen.elementaryTypes_string()})
                 elif var_type == "WSTRING":
-                    var_type.setcontent({"name" : "wstring", "value" : plcopen.elementaryTypes_wstring()})
+                    tempvartype.setcontent({"name" : "wstring", "value" : plcopen.elementaryTypes_wstring()})
                 else:
-                    var_type.setcontent({"name" : var_type, "value" : None})
+                    tempvartype.setcontent({"name" : var_type, "value" : None})
             else:
                 tempderivedtype = plcopen.derivedTypes_derived()
                 tempderivedtype.setname(var_type)
                 tempvartype.setcontent({"name" : "derived", "value" : tempderivedtype})
             tempvar.settype(tempvartype)
+            
+            if var_initial != "":
+                value = plcopen.value()
+                value.setvalue(var_initial)
+                tempvar.setinitialValue(value)
             
             global_vars.append(tempvar)
         return global_vars
@@ -1531,7 +1609,7 @@ class PLCControler:
                                 result_blocktype["inputs"] = [(i[0], "ANY", i[2]) for i in result_blocktype["inputs"]]
                                 result_blocktype["outputs"] = [(o[0], "ANY", o[2]) for o in result_blocktype["outputs"]]
                                 return result_blocktype
-                        result_blocktype = blocktype
+                        result_blocktype = blocktype.copy()
         if result_blocktype is not None:
             return result_blocktype
         project = self.GetProject(debug)
@@ -2071,7 +2149,13 @@ class PLCControler:
     def GetEditedElementVariables(self, tagname, debug = False):
         words = tagname.split("::")
         if words[0] in ["P","T","A"]:
-            return self.GetProjectPouVariables(words[1], debug)
+            return self.GetProjectPouVariableNames(words[1], debug)
+        elif words[0] in ["C", "R"]:
+            names = self.GetConfigurationVariableNames(words[1], debug)
+            if words[0] == "R":
+                names.extend(self.GetConfigurationResourceVariableNames(
+                    words[1], words[2], debug))
+            return names
         return []
 
     def GetEditedElementCopy(self, tagname, debug = False):
@@ -2095,15 +2179,20 @@ class PLCControler:
                     text += instance_copy.generateXMLText(name.split("_")[-1], 0)
         return text
     
-    def GenerateNewName(self, tagname, name, format, exclude={}, debug=False):
+    def GenerateNewName(self, tagname, name, format, start_idx=0, exclude={}, debug=False):
         names = exclude.copy()
         if tagname is not None:
-            names.update(dict([(varname.upper(), True) for varname in self.GetEditedElementVariables(tagname, debug)]))
-            element = self.GetEditedElement(tagname, debug)
-            if element is not None:
-                for instance in element.getinstances():
-                    if isinstance(instance, (plcopen.sfcObjects_step, plcopen.commonObjects_connector, plcopen.commonObjects_continuation)):
-                        names[instance.getname().upper()] = True
+            names.update(dict([(varname.upper(), True) 
+                               for varname in self.GetEditedElementVariables(tagname, debug)]))
+            words = tagname.split("::")
+            if words[0] in ["P","T","A"]:
+                element = self.GetEditedElement(tagname, debug)
+                if element is not None and element.getbodyType() not in ["ST", "IL"]:
+                    for instance in element.getinstances():
+                        if isinstance(instance, (plcopen.sfcObjects_step, 
+                                                 plcopen.commonObjects_connector, 
+                                                 plcopen.commonObjects_continuation)):
+                            names[instance.getname().upper()] = True
         else:
             project = self.GetProject(debug)
             if project is not None:
@@ -2122,7 +2211,7 @@ class PLCControler:
                     for resource in config.getresource():
                         names[resource.getname().upper()] = True
             
-        i = 0
+        i = start_idx
         while name is None or names.get(name.upper(), False):
             name = (format%i)
             i += 1
@@ -2152,7 +2241,7 @@ class PLCControler:
             text = "<paste>%s</paste>"%text
             
             try:
-                tree = minidom.parseString(text)
+                tree = minidom.parseString(text.encode("utf-8"))
             except:
                 return _("Invalid plcopen element(s)!!!")
             instances = []
@@ -2178,12 +2267,19 @@ class PLCControler:
                                         blocktype = instance.gettypeName()
                                         if element_type == "function":
                                             return _("FunctionBlock \"%s\" can't be pasted in a Function!!!")%blocktype
-                                        blockname = self.GenerateNewName(tagname, blockname, "%s%%d"%blocktype, debug=debug)
+                                        blockname = self.GenerateNewName(tagname, 
+                                                                         blockname, 
+                                                                         "%s%%d"%blocktype, 
+                                                                         debug=debug)
                                         exclude[blockname] = True
                                         instance.setinstanceName(blockname)
                                         self.AddEditedElementPouVar(tagname, blocktype, blockname)
                                 elif child.nodeName == "step":
-                                    stepname = self.GenerateNewName(tagname, instance.getname(), "Step%d", exclude, debug)
+                                    stepname = self.GenerateNewName(tagname, 
+                                                                    instance.getname(), 
+                                                                    "Step%d", 
+                                                                    exclude=exclude, 
+                                                                    debug=debug)
                                     exclude[stepname] = True
                                     instance.setname(stepname)
                                 localid = instance.getlocalId()

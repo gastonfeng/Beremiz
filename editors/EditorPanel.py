@@ -39,7 +39,6 @@ class EditorPanel(wx.SplitterWindow):
     def _init_ctrls(self, parent):
         wx.SplitterWindow.__init__(self, parent,
               style=wx.SUNKEN_BORDER|wx.SP_3D)
-        self.SetNeedUpdating(True)
         self.SetMinimumPaneSize(1)
         
         self._init_MenuItems()
@@ -87,12 +86,6 @@ class EditorPanel(wx.SplitterWindow):
     
     def SetIcon(self, icon):
         self.Icon = icon
-    
-    def GetState(self):
-        return None
-    
-    def SetState(self, state):
-        pass
     
     def IsViewing(self, tagname):
         return self.GetTagName() == tagname

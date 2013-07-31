@@ -22,7 +22,8 @@ from editors.GraphicViewer import GraphicViewer
 from editors.ResourceEditor import ConfigurationEditor, ResourceEditor
 from editors.DataTypeEditor import DataTypeEditor
 from PLCControler import *
-from controls import CustomTree, LibraryPanel, PouInstanceVariablesPanel, DebugVariablePanel, SearchResultPanel
+from controls import CustomTree, LibraryPanel, PouInstanceVariablesPanel, SearchResultPanel
+from controls.DebugVariablePanel import DebugVariablePanel
 from dialogs import ProjectDialog, PouDialog, PouTransitionDialog, PouActionDialog, FindInPouDialog, SearchInProjectDialog
 from util.BitmapLibrary import GetBitmap
 
@@ -210,15 +211,13 @@ def GetShortcutKeyCallbackFunction(viewer_function):
 def GetDeleteElementFunction(remove_function, parent_type=None, check_function=None):
     def DeleteElementFunction(self, selected):
         name = self.ProjectTree.GetItemText(selected)
-        if check_function is None or not check_function(self.Controler, name):
+        if check_function is None or check_function(name):
             if parent_type is not None:
                 item_infos = self.ProjectTree.GetPyData(selected)
                 parent_name = item_infos["tagname"].split("::")[1]
                 remove_function(self.Controler, parent_name, name)
             else:
                 remove_function(self.Controler, name)
-        else:
-            self.ShowErrorMessage(_("\"%s\" is used by one or more POUs. It can't be removed!")%name)
     return DeleteElementFunction
 
 if wx.Platform == '__WXMSW__':
@@ -307,8 +306,6 @@ def ComputeTabsLayout(tabs, rect):
 UNEDITABLE_NAMES_DICT = dict([(_(name), name) for name in UNEDITABLE_NAMES])
 
 class IDEFrame(wx.Frame):
-    
-    Starting = False
     
     # Compatibility function for wx versions < 2.6
     if wx.VERSION < (2, 6, 0):
@@ -457,7 +454,6 @@ class IDEFrame(wx.Frame):
               style=wx.DEFAULT_FRAME_STYLE)
         self.SetClientSize(wx.Size(1000, 600))
         self.Bind(wx.EVT_ACTIVATE, self.OnActivated)
-        self.Bind(wx.EVT_SIZE, self.OnResize)
         
         self.TabsImageList = wx.ImageList(31, 16)
         self.TabsImageListIndexes = {}
@@ -526,22 +522,18 @@ class IDEFrame(wx.Frame):
         self.ProjectTree = CustomTree(id=ID_PLCOPENEDITORPROJECTTREE,
                   name='ProjectTree', parent=self.ProjectPanel, 
                   pos=wx.Point(0, 0), size=wx.Size(0, 0),
-                  style=wx.TR_HAS_BUTTONS|wx.TR_SINGLE|wx.SUNKEN_BORDER|wx.TR_EDIT_LABELS)
+                  style=wx.SUNKEN_BORDER,
+                  agwStyle=wx.TR_HAS_BUTTONS|wx.TR_SINGLE|wx.TR_EDIT_LABELS)
         self.ProjectTree.SetBackgroundBitmap(GetBitmap("custom_tree_background"),
                                              wx.ALIGN_RIGHT|wx.ALIGN_BOTTOM)
         add_menu = wx.Menu()
         self._init_coll_AddMenu_Items(add_menu)
         self.ProjectTree.SetAddMenu(add_menu)
-        if wx.Platform == '__WXMSW__':
-            self.Bind(wx.EVT_TREE_ITEM_RIGHT_CLICK, self.OnProjectTreeRightUp,
-                  id=ID_PLCOPENEDITORPROJECTTREE)
-            self.Bind(wx.EVT_TREE_SEL_CHANGED, self.OnProjectTreeItemSelected,
-                  id=ID_PLCOPENEDITORPROJECTTREE)
-        else:
-            self.ProjectTree.Bind(wx.EVT_RIGHT_UP, self.OnProjectTreeRightUp)
-            self.ProjectTree.Bind(wx.EVT_LEFT_UP, self.OnProjectTreeLeftUp)
-            self.Bind(wx.EVT_TREE_SEL_CHANGING, self.OnProjectTreeItemChanging,
-                  id=ID_PLCOPENEDITORPROJECTTREE)
+        self.Bind(wx.EVT_TREE_ITEM_RIGHT_CLICK, self.OnProjectTreeRightUp,
+              id=ID_PLCOPENEDITORPROJECTTREE)
+        self.ProjectTree.Bind(wx.EVT_LEFT_UP, self.OnProjectTreeLeftUp)
+        self.Bind(wx.EVT_TREE_SEL_CHANGING, self.OnProjectTreeItemChanging,
+              id=ID_PLCOPENEDITORPROJECTTREE)
         self.Bind(wx.EVT_TREE_BEGIN_DRAG, self.OnProjectTreeBeginDrag,
               id=ID_PLCOPENEDITORPROJECTTREE)
         self.Bind(wx.EVT_TREE_BEGIN_LABEL_EDIT, self.OnProjectTreeItemBeginEdit,
@@ -550,6 +542,7 @@ class IDEFrame(wx.Frame):
               id=ID_PLCOPENEDITORPROJECTTREE)
         self.Bind(wx.EVT_TREE_ITEM_ACTIVATED, self.OnProjectTreeItemActivated,
               id=ID_PLCOPENEDITORPROJECTTREE)
+        self.ProjectTree.Bind(wx.EVT_MOTION, self.OnProjectTreeMotion)
         
         #-----------------------------------------------------------------------
         #        Creating PLCopen Project POU Instance Variables Panel
@@ -677,12 +670,24 @@ class IDEFrame(wx.Frame):
         self.CurrentEditorToolBar = []
         self.CurrentMenu = None
         self.SelectedItem = None
+        self.LastToolTipItem = None
         self.SearchParams = None
         self.Highlights = {}
         self.DrawingMode = FREEDRAWING_MODE
         #self.DrawingMode = DRIVENDRAWING_MODE
         self.AuiTabCtrl = []
-        self.DefaultPerspective = None
+        
+        # Save default perspective
+        notebooks = {}
+        for notebook, entry_name in [(self.LeftNoteBook, "leftnotebook"),
+                                     (self.BottomNoteBook, "bottomnotebook"),
+                                     (self.RightNoteBook, "rightnotebook")]:
+            notebooks[entry_name] = self.SaveTabLayout(notebook)
+        self.DefaultPerspective = {
+            "perspective": self.AUIManager.SavePerspective(),
+            "notebooks": notebooks,
+        }
+        
         
         # Initialize Printing configuring elements
         self.PrintData = wx.PrintData()
@@ -693,12 +698,10 @@ class IDEFrame(wx.Frame):
         self.PageSetupData.SetMarginBottomRight(wx.Point(10, 20))
         
         self.SetRefreshFunctions()
+        self.SetDeleteFunctions()
     
     def __del__(self):
         self.FindDialog.Destroy()
-    
-    def ResetStarting(self):
-        self.Starting = False
     
     def Show(self):
         wx.Frame.Show(self)
@@ -709,59 +712,21 @@ class IDEFrame(wx.Frame):
             wx.CallAfter(self._Refresh, TITLE, EDITORTOOLBAR, FILEMENU, EDITMENU, DISPLAYMENU)
         event.Skip()
 
+    def SelectTab(self, tab):
+        for notebook in [self.LeftNoteBook, self.BottomNoteBook, self.RightNoteBook]:
+            idx = notebook.GetPageIndex(tab)
+            if idx != wx.NOT_FOUND and idx != notebook.GetSelection():
+                notebook.SetSelection(idx)
+                return
+
 #-------------------------------------------------------------------------------
 #                Saving and restoring frame organization functions
 #-------------------------------------------------------------------------------
 
-    def OnResize(self, event):
-        if self.Starting:
-            self.RestoreLastLayout()
-        event.Skip()
-    
-    def EnableSaveProjectState(self):
-        return False
-    
-    def GetProjectConfiguration(self):
-        projects = {}
-        try:
-            if self.Config.HasEntry("projects"):
-                projects = cPickle.loads(str(self.Config.Read("projects")))
-        except:
-            pass
-        
-        return projects.get(
-            EncodeFileSystemPath(os.path.realpath(self.Controler.GetFilePath())), {})
-    
-    def SavePageState(self, page):
-        state = page.GetState()
-        if state is not None:
-            if self.Config.HasEntry("projects"):
-                projects = cPickle.loads(str(self.Config.Read("projects")))
-            else:
-                projects = {}
-            
-            project_infos = projects.setdefault(
-                 EncodeFileSystemPath(os.path.realpath(self.Controler.GetFilePath())), {})
-            editors_state = project_infos.setdefault("editors_state", {})
-            
-            if page.IsDebugging():
-                editors_state[page.GetInstancePath()] = state
-            else:
-                editors_state[page.GetTagName()] = state
-            
-            self.Config.Write("projects", cPickle.dumps(projects))
-            self.Config.Flush()
-    
     def GetTabInfos(self, tab):
-        if isinstance(tab, EditorPanel):
-            if tab.IsDebugging():
-                return ("debug", tab.GetInstancePath())
-            else:
-                return ("editor", tab.GetTagName())
-        else:
-            for page_name, (page_ref, page_title) in self.MainTabs.iteritems():
-                if page_ref == tab:
-                    return ("main", page_name)
+        for page_name, (page_ref, page_title) in self.MainTabs.iteritems():
+            if page_ref == tab:
+                return ("main", page_name)
         return None
     
     def SaveTabLayout(self, notebook):
@@ -854,115 +819,19 @@ class IDEFrame(wx.Frame):
         if self.Config.HasEntry("framesize"):
             frame_size = cPickle.loads(str(self.Config.Read("framesize")))
         
-        self.Starting = True
         if frame_size is None:
             self.Maximize()
         else:
             self.SetClientSize(frame_size)
-            wx.CallAfter(self.RestoreLastLayout)
         
-    def RestoreLastLayout(self):
-        notebooks = {}
-        for notebook, entry_name in [(self.LeftNoteBook, "leftnotebook"),
-                                     (self.BottomNoteBook, "bottomnotebook"),
-                                     (self.RightNoteBook, "rightnotebook")]:
-            notebooks[entry_name] = self.SaveTabLayout(notebook)
-        self.DefaultPerspective = {
-            "perspective": self.AUIManager.SavePerspective(),
-            "notebooks": notebooks,
-        }
-        
-        try:
-            if self.Config.HasEntry("perspective"):
-                self.AUIManager.LoadPerspective(unicode(self.Config.Read("perspective")))
-        
-            if self.Config.HasEntry("notebooks"):
-                notebooks = cPickle.loads(str(self.Config.Read("notebooks")))
-                
-                for notebook in [self.LeftNoteBook, self.BottomNoteBook, self.RightNoteBook]:
-                    for idx in xrange(notebook.GetPageCount()):
-                        notebook.RemovePage(0)
-                        
-                for notebook, entry_name in [(self.LeftNoteBook, "leftnotebook"),
-                                             (self.BottomNoteBook, "bottomnotebook"),
-                                             (self.RightNoteBook, "rightnotebook")]:
-                    self.LoadTabLayout(notebook, notebooks.get(entry_name))
-        except:
-            self.ResetPerspective()
-        
-        if self.EnableSaveProjectState():
-            self.LoadProjectLayout()
-        
-        self._Refresh(EDITORTOOLBAR)
-        
-        if wx.Platform == '__WXMSW__':
-            wx.CallAfter(self.ResetStarting)
-        else:
-            self.ResetStarting()
-        wx.CallAfter(self.RefreshEditor)
-    
     def SaveLastState(self):
         if not self.IsMaximized():
             self.Config.Write("framesize", cPickle.dumps(self.GetClientSize()))
         elif self.Config.HasEntry("framesize"):
             self.Config.DeleteEntry("framesize")
         
-        notebooks = {}
-        for notebook, entry_name in [(self.LeftNoteBook, "leftnotebook"),
-                                     (self.BottomNoteBook, "bottomnotebook"),
-                                     (self.RightNoteBook, "rightnotebook")]:
-            notebooks[entry_name] = self.SaveTabLayout(notebook)
-        self.Config.Write("notebooks", cPickle.dumps(notebooks))
-        
-        pane = self.AUIManager.GetPane(self.TabsOpened)
-        if pane.IsMaximized():
-            self.AUIManager.RestorePane(pane)
-        self.Config.Write("perspective", self.AUIManager.SavePerspective())
-        
-        if self.EnableSaveProjectState():
-            self.SaveProjectLayout()
-        
-            for i in xrange(self.TabsOpened.GetPageCount()):
-                self.SavePageState(self.TabsOpened.GetPage(i))
-        
         self.Config.Flush()
 
-    def SaveProjectLayout(self):
-        if self.Controler is not None:
-            tabs = []
-            
-            projects = {}
-            try:
-                 if self.Config.HasEntry("projects"):
-                    projects = cPickle.loads(str(self.Config.Read("projects")))
-            except:
-                pass
-            
-            project_infos = projects.setdefault(
-                 EncodeFileSystemPath(os.path.realpath(self.Controler.GetFilePath())), {})
-            project_infos["tabs"] = self.SaveTabLayout(self.TabsOpened)
-            if self.EnableDebug:
-                project_infos["debug_vars"] = self.DebugVariablePanel.GetDebugVariables()
-                
-            self.Config.Write("projects", cPickle.dumps(projects))
-            self.Config.Flush()
-    
-    def LoadProjectLayout(self):
-        if self.Controler is not None:
-            project = self.GetProjectConfiguration()
-            
-            try:
-                if project.has_key("tabs"):
-                    self.LoadTabLayout(self.TabsOpened, project["tabs"])
-            except:
-                self.DeleteAllPages()
-                
-            if self.EnableDebug:
-                #try:
-                self.DebugVariablePanel.SetDebugVariables(project.get("debug_vars", []))
-                #except:
-                #    self.DebugVariablePanel.ResetView()
-            
 #-------------------------------------------------------------------------------
 #                               General Functions
 #-------------------------------------------------------------------------------
@@ -998,8 +867,6 @@ class IDEFrame(wx.Frame):
             window = self.TabsOpened.GetPage(selected)
             
             if window.CheckSaveBeforeClosing():
-                if self.EnableSaveProjectState():
-                    self.SavePageState(window)
                 
                 # Refresh all window elements that have changed
                 wx.CallAfter(self._Refresh, TITLE, EDITORTOOLBAR, FILEMENU, EDITMENU, DISPLAYMENU)
@@ -1010,8 +877,12 @@ class IDEFrame(wx.Frame):
                 event.Veto()
         
 
-    def GetCopyBuffer(self):
+    def GetCopyBuffer(self, primary_selection=False):
         data = None
+        if primary_selection and wx.Platform == '__WXMSW__':
+            return data
+        else:
+            wx.TheClipboard.UsePrimarySelection(primary_selection)
         if wx.TheClipboard.Open():
             dataobj = wx.TextDataObject()
             if wx.TheClipboard.GetData(dataobj):
@@ -1019,7 +890,11 @@ class IDEFrame(wx.Frame):
             wx.TheClipboard.Close()
         return data
         
-    def SetCopyBuffer(self, text):
+    def SetCopyBuffer(self, text, primary_selection=False):
+        if primary_selection and wx.Platform == '__WXMSW__':
+            return
+        else:
+            wx.TheClipboard.UsePrimarySelection(primary_selection)
         if wx.TheClipboard.Open():
             data = wx.TextDataObject()
             data.SetText(text)
@@ -1317,20 +1192,29 @@ class IDEFrame(wx.Frame):
         elif isinstance(control, wx.ComboBox):
             control.SetMark(0, control.GetLastPosition() + 1)
     
-    DeleteFunctions = {
-        ITEM_DATATYPE: GetDeleteElementFunction(PLCControler.ProjectRemoveDataType, check_function=PLCControler.DataTypeIsUsed),
-        ITEM_POU: GetDeleteElementFunction(PLCControler.ProjectRemovePou, check_function=PLCControler.PouIsUsed),
-        ITEM_TRANSITION: GetDeleteElementFunction(PLCControler.ProjectRemovePouTransition, ITEM_POU),
-        ITEM_ACTION: GetDeleteElementFunction(PLCControler.ProjectRemovePouAction, ITEM_POU),
-        ITEM_CONFIGURATION: GetDeleteElementFunction(PLCControler.ProjectRemoveConfiguration),
-        ITEM_RESOURCE: GetDeleteElementFunction(PLCControler.ProjectRemoveConfigurationResource, ITEM_CONFIGURATION)
-    }
+    def SetDeleteFunctions(self):
+        self.DeleteFunctions = {
+            ITEM_DATATYPE: GetDeleteElementFunction(
+                    PLCControler.ProjectRemoveDataType, 
+                    check_function=self.CheckDataTypeIsUsedBeforeDeletion),
+            ITEM_POU: GetDeleteElementFunction(
+                    PLCControler.ProjectRemovePou, 
+                    check_function=self.CheckPouIsUsedBeforeDeletion),
+            ITEM_TRANSITION: GetDeleteElementFunction(
+                    PLCControler.ProjectRemovePouTransition, ITEM_POU),
+            ITEM_ACTION: GetDeleteElementFunction(
+                    PLCControler.ProjectRemovePouAction, ITEM_POU),
+            ITEM_CONFIGURATION: GetDeleteElementFunction(
+                    PLCControler.ProjectRemoveConfiguration),
+            ITEM_RESOURCE: GetDeleteElementFunction(
+                    PLCControler.ProjectRemoveConfigurationResource, ITEM_CONFIGURATION)
+        }
     
     def OnDeleteMenu(self, event):
         window = self.FindFocus()
         if window == self.ProjectTree or window is None:
             selected = self.ProjectTree.GetSelection()
-            if selected.IsOk():
+            if selected is not None and selected.IsOk():
                 function = self.DeleteFunctions.get(self.ProjectTree.GetPyData(selected)["type"], None)
                 if function is not None:
                     function(self, selected)
@@ -1372,7 +1256,7 @@ class IDEFrame(wx.Frame):
             result = self.Controler.SearchInProject(criteria)
             self.ClearSearchResults()
             self.SearchResultPanel.SetSearchResults(criteria, result)
-            self.BottomNoteBook.SetSelection(self.BottomNoteBook.GetPageIndex(self.SearchResultPanel))
+            self.SelectTab(self.SearchResultPanel)
             
 #-------------------------------------------------------------------------------
 #                             Display Menu Functions
@@ -1455,33 +1339,31 @@ class IDEFrame(wx.Frame):
         notebook.SetSelection(notebook.GetPageIndex(tab))
     
     def OnPouSelectedChanging(self, event):
-        if not self.Starting:
-            selected = self.TabsOpened.GetSelection()
-            if selected >= 0:
-                window = self.TabsOpened.GetPage(selected)
-                if not window.IsDebugging():
-                    window.ResetBuffer()
+        selected = self.TabsOpened.GetSelection()
+        if selected >= 0:
+            window = self.TabsOpened.GetPage(selected)
+            if not window.IsDebugging():
+                window.ResetBuffer()
         event.Skip()
     
     def OnPouSelectedChanged(self, event):
-        if not self.Starting:
-            selected = self.TabsOpened.GetSelection()
-            if selected >= 0:
-                window = self.TabsOpened.GetPage(selected)
-                tagname = window.GetTagName()
-                if not window.IsDebugging():
-                    wx.CallAfter(self.SelectProjectTreeItem, tagname)
-                    wx.CallAfter(self.PouInstanceVariablesPanel.SetPouType, tagname)
-                    window.RefreshView()
-                    self.EnsureTabVisible(self.LibraryPanel)
-                else:
-                    instance_path = window.GetInstancePath()
-                    if tagname == "":
-                        instance_path = instance_path.rsplit(".", 1)[0]
-                        tagname = self.Controler.GetPouInstanceTagName(instance_path, self.EnableDebug)
-                    self.EnsureTabVisible(self.DebugVariablePanel)
-                    wx.CallAfter(self.PouInstanceVariablesPanel.SetPouType, tagname, instance_path)
-            wx.CallAfter(self._Refresh, FILEMENU, EDITMENU, DISPLAYMENU, EDITORTOOLBAR)
+        selected = self.TabsOpened.GetSelection()
+        if selected >= 0:
+            window = self.TabsOpened.GetPage(selected)
+            tagname = window.GetTagName()
+            if not window.IsDebugging():
+                self.SelectProjectTreeItem(tagname)
+                self.PouInstanceVariablesPanel.SetPouType(tagname)
+                window.RefreshView()
+                self.EnsureTabVisible(self.LibraryPanel)
+            else:
+                instance_path = window.GetInstancePath()
+                if tagname == "":
+                    instance_path = instance_path.rsplit(".", 1)[0]
+                    tagname = self.Controler.GetPouInstanceTagName(instance_path, self.EnableDebug)
+                self.EnsureTabVisible(self.DebugVariablePanel)
+                wx.CallAfter(self.PouInstanceVariablesPanel.SetPouType, tagname, instance_path)
+        wx.CallAfter(self._Refresh, FILEMENU, EDITMENU, DISPLAYMENU, EDITORTOOLBAR)
         event.Skip()
         
     def RefreshEditor(self):
@@ -1544,30 +1426,44 @@ class IDEFrame(wx.Frame):
 #-------------------------------------------------------------------------------
 
     def RefreshProjectTree(self):
+        # Extract current selected item tagname
+        selected = self.ProjectTree.GetSelection()
+        if selected is not None and selected.IsOk():
+            item_infos = self.ProjectTree.GetPyData(selected)
+            tagname = item_infos.get("tagname", None)
+        else:
+            tagname = None
+        
+        # Refresh treectrl items according to project infos
         infos = self.Controler.GetProjectInfos()
         root = self.ProjectTree.GetRootItem()
-        if not root.IsOk():
+        if root is None or not root.IsOk():
             root = self.ProjectTree.AddRoot(infos["name"])
         self.GenerateProjectTreeBranch(root, infos)
         self.ProjectTree.Expand(root)
+        
+        # Select new item corresponding to previous selected item
+        if tagname is not None:
+            self.SelectProjectTreeItem(tagname)
 
-    def ResetSelectedItem(self):
-        self.SelectedItem = None
-
-    def GenerateProjectTreeBranch(self, root, infos):
+    def GenerateProjectTreeBranch(self, root, infos, item_alone=False):
         to_delete = []
         item_name = infos["name"]
         if infos["type"] in ITEMS_UNEDITABLE:
             if len(infos["values"]) == 1:
-                return self.GenerateProjectTreeBranch(root, infos["values"][0])
+                return self.GenerateProjectTreeBranch(root, infos["values"][0], True)
             item_name = _(item_name)
         self.ProjectTree.SetItemText(root, item_name)
         self.ProjectTree.SetPyData(root, infos)
         highlight_colours = self.Highlights.get(infos.get("tagname", None), (wx.WHITE, wx.BLACK))
         self.ProjectTree.SetItemBackgroundColour(root, highlight_colours[0])
         self.ProjectTree.SetItemTextColour(root, highlight_colours[1])
+        self.ProjectTree.SetItemExtraImage(root, None)
         if infos["type"] == ITEM_POU:
-            self.ProjectTree.SetItemImage(root, self.TreeImageDict[self.Controler.GetPouBodyType(infos["name"])])
+            self.ProjectTree.SetItemImage(root, 
+                self.TreeImageDict[self.Controler.GetPouBodyType(infos["name"])])
+            if item_alone:
+                self.ProjectTree.SetItemExtraImage(root, self.Controler.GetPouType(infos["name"]))
         elif infos.has_key("icon") and infos["icon"] is not None:
             icon_name = infos["icon"]
             if not self.TreeImageDict.has_key(icon_name):
@@ -1576,56 +1472,48 @@ class IDEFrame(wx.Frame):
         elif self.TreeImageDict.has_key(infos["type"]):
             self.ProjectTree.SetItemImage(root, self.TreeImageDict[infos["type"]])      
         
-        if wx.VERSION >= (2, 6, 0):
-            item, root_cookie = self.ProjectTree.GetFirstChild(root)
-        else:
-            item, root_cookie = self.ProjectTree.GetFirstChild(root, 0)
+        item, root_cookie = self.ProjectTree.GetFirstChild(root)
         for values in infos["values"]:
             if values["type"] not in ITEMS_UNEDITABLE or len(values["values"]) > 0:
-                if not item.IsOk():
+                if item is None or not item.IsOk():
                     item = self.ProjectTree.AppendItem(root, "")
-                    if wx.Platform != '__WXMSW__':
-                        item, root_cookie = self.ProjectTree.GetNextChild(root, root_cookie)
+                    item, root_cookie = self.ProjectTree.GetNextChild(root, root_cookie)
                 self.GenerateProjectTreeBranch(item, values)
                 item, root_cookie = self.ProjectTree.GetNextChild(root, root_cookie)
-        while item.IsOk():
+        while item is not None and item.IsOk():
             to_delete.append(item)
             item, root_cookie = self.ProjectTree.GetNextChild(root, root_cookie)
         for item in to_delete:
             self.ProjectTree.Delete(item)
 
+    TagNamePartsItemTypes = {
+        "D": [ITEM_DATATYPE],
+        "P": [ITEM_POU],
+        "T": [ITEM_POU, ITEM_TRANSITION],
+        "A": [ITEM_POU, ITEM_ACTION],
+        "C": [ITEM_CONFIGURATION],
+        "R": [ITEM_CONFIGURATION, ITEM_RESOURCE]}
+
     def SelectProjectTreeItem(self, tagname):
+        result = False
         if self.ProjectTree is not None:
             root = self.ProjectTree.GetRootItem()
-            if root.IsOk():
+            if root is not None and root.IsOk():
                 words = tagname.split("::")
-                if words[0] == "D":
-                    return self.RecursiveProjectTreeItemSelection(root, [(words[1], ITEM_DATATYPE)])
-                elif words[0] == "P":
-                    return self.RecursiveProjectTreeItemSelection(root, [(words[1], ITEM_POU)])
-                elif words[0] == "T":
-                    return self.RecursiveProjectTreeItemSelection(root, [(words[1], ITEM_POU), (words[2], ITEM_TRANSITION)])
-                elif words[0] == "A":
-                    return self.RecursiveProjectTreeItemSelection(root, [(words[1], ITEM_POU), (words[2], ITEM_ACTION)])
-                elif words[0] == "C":
-                    return self.RecursiveProjectTreeItemSelection(root, [(words[1], ITEM_CONFIGURATION)])
-                elif words[0] == "R":
-                    return self.RecursiveProjectTreeItemSelection(root, [(words[1], ITEM_CONFIGURATION), (words[2], ITEM_RESOURCE)])
-        return False
+                result = self.RecursiveProjectTreeItemSelection(root,
+                    zip(words[1:], self.TagNamePartsItemTypes.get(words[0], [])))
+        return result
 
     def RecursiveProjectTreeItemSelection(self, root, items):
         found = False
-        if wx.VERSION >= (2, 6, 0):
-            item, root_cookie = self.ProjectTree.GetFirstChild(root)
-        else:
-            item, root_cookie = self.ProjectTree.GetFirstChild(root, 0)
-        while item.IsOk() and not found:
+        item, root_cookie = self.ProjectTree.GetFirstChild(root)
+        while item is not None and item.IsOk() and not found:
             item_infos = self.ProjectTree.GetPyData(item)
             if (item_infos["name"].split(":")[-1].strip(), item_infos["type"]) == items[0]:
                 if len(items) == 1:
                     self.SelectedItem = item
-                    wx.CallAfter(self.ProjectTree.SelectItem, item)
-                    wx.CallAfter(self.ResetSelectedItem)
+                    self.ProjectTree.SelectItem(item)
+                    self.ResetSelectedItem()
                     return True
                 else:
                     found = self.RecursiveProjectTreeItemSelection(item, items[1:])
@@ -1634,11 +1522,15 @@ class IDEFrame(wx.Frame):
             item, root_cookie = self.ProjectTree.GetNextChild(root, root_cookie)
         return found
 
+    def ResetSelectedItem(self):
+        self.SelectedItem = None
+
     def OnProjectTreeBeginDrag(self, event):
-        if wx.Platform == '__WXMSW__':
-            self.SelectedItem = event.GetItem()
-        if self.SelectedItem is not None and self.ProjectTree.GetPyData(self.SelectedItem)["type"] == ITEM_POU:
-            block_name = self.ProjectTree.GetItemText(self.SelectedItem)
+        selected_item = (self.SelectedItem 
+                         if self.SelectedItem is not None
+                         else event.GetItem())
+        if selected_item.IsOk() and self.ProjectTree.GetPyData(selected_item)["type"] == ITEM_POU:
+            block_name = self.ProjectTree.GetItemText(selected_item)
             block_type = self.Controler.GetPouType(block_name)
             if block_type != "program":
                 data = wx.TextDataObject(str((block_name, block_type, "")))
@@ -1682,7 +1574,7 @@ class IDEFrame(wx.Frame):
                     if new_name.upper() in [name.upper() for name in self.Controler.GetProjectPouNames() if name != old_name]:
                         message = _("\"%s\" pou already exists!")%new_name
                         abort = True
-                    elif new_name.upper() in [name.upper() for name in self.Controler.GetProjectPouVariables()]:
+                    elif new_name.upper() in [name.upper() for name in self.Controler.GetProjectPouVariableNames()]:
                         messageDialog = wx.MessageDialog(self, _("A POU has an element named \"%s\". This could cause a conflict. Do you wish to continue?")%new_name, _("Error"), wx.YES_NO|wx.ICON_QUESTION)
                         if messageDialog.ShowModal() == wx.ID_NO:
                             abort = True
@@ -1696,7 +1588,7 @@ class IDEFrame(wx.Frame):
                 elif item_infos["type"] == ITEM_TRANSITION:
                     if new_name.upper() in [name.upper() for name in self.Controler.GetProjectPouNames()]:
                         message = _("A POU named \"%s\" already exists!")%new_name
-                    elif new_name.upper() in [name.upper() for name in self.Controler.GetProjectPouVariables(pou_name) if name != old_name]:
+                    elif new_name.upper() in [name.upper() for name in self.Controler.GetProjectPouVariableNames(pou_name) if name != old_name]:
                         message = _("A variable with \"%s\" as name already exists in this pou!")%new_name
                     else:
                         words = item_infos["tagname"].split("::")
@@ -1707,7 +1599,7 @@ class IDEFrame(wx.Frame):
                 elif item_infos["type"] == ITEM_ACTION:
                     if new_name.upper() in [name.upper() for name in self.Controler.GetProjectPouNames()]:
                         message = _("A POU named \"%s\" already exists!")%new_name
-                    elif new_name.upper() in [name.upper() for name in self.Controler.GetProjectPouVariables(pou_name) if name != old_name]:
+                    elif new_name.upper() in [name.upper() for name in self.Controler.GetProjectPouVariableNames(pou_name) if name != old_name]:
                         message = _("A variable with \"%s\" as name already exists in this pou!")%new_name
                     else:
                         words = item_infos["tagname"].split("::")
@@ -1724,7 +1616,7 @@ class IDEFrame(wx.Frame):
                         if messageDialog.ShowModal() == wx.ID_NO:
                             abort = True
                         messageDialog.Destroy()
-                    elif new_name.upper() in [name.upper() for name in self.Controler.GetProjectPouVariables()]:
+                    elif new_name.upper() in [name.upper() for name in self.Controler.GetProjectPouVariableNames()]:
                         messageDialog = wx.MessageDialog(self, _("A POU has an element named \"%s\". This could cause a conflict. Do you wish to continue?")%new_name, _("Error"), wx.YES_NO|wx.ICON_QUESTION)
                         if messageDialog.ShowModal() == wx.ID_NO:
                             abort = True
@@ -1743,7 +1635,7 @@ class IDEFrame(wx.Frame):
                         if messageDialog.ShowModal() == wx.ID_NO:
                             abort = True
                         messageDialog.Destroy()
-                    elif new_name.upper() in [name.upper() for name in self.Controler.GetProjectPouVariables()]:
+                    elif new_name.upper() in [name.upper() for name in self.Controler.GetProjectPouVariableNames()]:
                         messageDialog = wx.MessageDialog(self, _("A POU has an element named \"%s\". This could cause a conflict. Do you wish to continue?")%new_name, _("Error"), wx.YES_NO|wx.ICON_QUESTION)
                         if messageDialog.ShowModal() == wx.ID_NO:
                             abort = True
@@ -1780,23 +1672,52 @@ class IDEFrame(wx.Frame):
             event.Skip()
     
     def ProjectTreeItemSelect(self, select_item):
-        name = self.ProjectTree.GetItemText(select_item)
-        item_infos = self.ProjectTree.GetPyData(select_item)
-        if item_infos["type"] in [ITEM_DATATYPE, ITEM_POU,
-                                  ITEM_CONFIGURATION, ITEM_RESOURCE,
-                                  ITEM_TRANSITION, ITEM_ACTION]:
-            self.EditProjectElement(item_infos["type"], item_infos["tagname"], True)
-            self.PouInstanceVariablesPanel.SetPouType(item_infos["tagname"])
+        if select_item is not None and select_item.IsOk():
+            name = self.ProjectTree.GetItemText(select_item)
+            item_infos = self.ProjectTree.GetPyData(select_item)
+            if item_infos["type"] in [ITEM_DATATYPE, ITEM_POU,
+                                      ITEM_CONFIGURATION, ITEM_RESOURCE,
+                                      ITEM_TRANSITION, ITEM_ACTION]:
+                self.EditProjectElement(item_infos["type"], item_infos["tagname"], True)
+                self.PouInstanceVariablesPanel.SetPouType(item_infos["tagname"])
         
     def OnProjectTreeLeftUp(self, event):
         if self.SelectedItem is not None:
             self.ProjectTree.SelectItem(self.SelectedItem)
             self.ProjectTreeItemSelect(self.SelectedItem)
-            wx.CallAfter(self.ResetSelectedItem)
+            self.ResetSelectedItem()
         event.Skip()
     
-    def OnProjectTreeItemSelected(self, event):
-        self.ProjectTreeItemSelect(event.GetItem())
+    def OnProjectTreeMotion(self, event):
+        if not event.Dragging():
+            pt = wx.Point(event.GetX(), event.GetY())
+            item, flags = self.ProjectTree.HitTest(pt)
+            if item is not None and item.IsOk() and flags & wx.TREE_HITTEST_ONITEMLABEL:
+                item_infos = self.ProjectTree.GetPyData(item)
+                if item != self.LastToolTipItem and self.LastToolTipItem is not None:
+                    self.ProjectTree.SetToolTip(None)
+                    self.LastToolTipItem = None
+                if (self.LastToolTipItem != item and 
+                    item_infos["type"] in [ITEM_POU, ITEM_TRANSITION, ITEM_ACTION]):
+                    bodytype = self.Controler.GetEditedElementBodyType(
+                            item_infos["tagname"])
+                    if item_infos["type"] == ITEM_POU:
+                        block_type = {
+                            "program": _("Program"),
+                            "functionBlock": _("Function Block"),
+                            "function": _("Function")
+                        }[self.Controler.GetPouType(item_infos["name"])]
+                    elif item_infos["type"] == ITEM_TRANSITION:
+                        block_type = "Transition"
+                    else:
+                        block_type = "Action"
+                    self.LastToolTipItem = item
+                    wx.CallAfter(self.ProjectTree.SetToolTipString, 
+                        "%s : %s : %s" % (
+                            block_type, bodytype, item_infos["name"]))
+            elif self.LastToolTipItem is not None:
+                self.ProjectTree.SetToolTip(None)
+                self.LastToolTipItem = None
         event.Skip()
     
     def OnProjectTreeItemChanging(self, event):
@@ -1861,16 +1782,6 @@ class IDEFrame(wx.Frame):
                     new_window.SetIcon(GetBitmap("DATATYPE"))
                     self.AddPage(new_window, "")
             if new_window is not None:
-                if self.EnableSaveProjectState():
-                    project_infos = self.GetProjectConfiguration()
-                    if project_infos.has_key("editors_state"):
-                        if new_window.IsDebugging():
-                            state = project_infos["editors_state"].get(new_window.GetInstancePath())
-                        else:
-                            state = project_infos["editors_state"].get(tagname)
-                        if state is not None:
-                            wx.CallAfter(new_window.SetState, state)
-                
                 openedidx = self.IsOpened(tagname)
                 old_selected = self.TabsOpened.GetSelection()
                 if old_selected != openedidx:
@@ -1885,10 +1796,7 @@ class IDEFrame(wx.Frame):
             return new_window
     
     def OnProjectTreeRightUp(self, event):
-        if wx.Platform == '__WXMSW__':
-            item = event.GetItem()
-        else:
-            item, flags = self.ProjectTree.HitTest(wx.Point(event.GetX(), event.GetY()))
+        item = event.GetItem()
         self.ProjectTree.SelectItem(item)
         self.ProjectTreeItemSelect(item)
         name = self.ProjectTree.GetItemText(item)
@@ -1931,8 +1839,8 @@ class IDEFrame(wx.Frame):
                 menu = wx.Menu(title='')
                 new_id = wx.NewId()
                 AppendMenu(menu, help='', id=new_id, kind=wx.ITEM_NORMAL, text=_("Add Transition"))
-                parent = self.ProjectTree.GetItemParent(item)["type"]
-                parent_type = self.ProjectTree.GetPyData(parent)
+                parent = self.ProjectTree.GetItemParent(item)
+                parent_type = self.ProjectTree.GetPyData(parent)["type"]
                 while parent_type != ITEM_POU:
                     parent = self.ProjectTree.GetItemParent(parent)
                     parent_type = self.ProjectTree.GetPyData(parent)["type"]
@@ -1958,11 +1866,15 @@ class IDEFrame(wx.Frame):
                 while parent_type not in [ITEM_CONFIGURATION, ITEM_PROJECT]:
                     parent = self.ProjectTree.GetItemParent(parent)
                     parent_type = self.ProjectTree.GetPyData(parent)["type"]
+                parent_name = None
                 if parent_type == ITEM_PROJECT:
-                    parent_name = None
+                    config_names = self.Controler.GetProjectConfigNames()
+                    if len(config_names) > 0:
+                        parent_name = config_names[0]
                 else:
                     parent_name = self.ProjectTree.GetItemText(parent)
-                self.Bind(wx.EVT_MENU, self.GenerateAddResourceFunction(parent_name), id=new_id)
+                if parent_name is not None:
+                    self.Bind(wx.EVT_MENU, self.GenerateAddResourceFunction(parent_name), id=new_id)
             
         else:
             if item_infos["type"] == ITEM_POU:
@@ -2012,6 +1924,8 @@ class IDEFrame(wx.Frame):
         if menu is not None:
             self.PopupMenu(menu)
             menu.Destroy()
+        
+        self.ResetSelectedItem()
         
         event.Skip()
 
@@ -2073,13 +1987,6 @@ class IDEFrame(wx.Frame):
                     icon = GetBitmap("ACTION", bodytype)
         
         if new_window is not None:
-            if self.EnableSaveProjectState():
-                project_infos = self.GetProjectConfiguration()
-                if project_infos.has_key("editors_state"):
-                    state = project_infos["editors_state"].get(instance_path)
-                    if state is not None:
-                        wx.CallAfter(new_window.SetState, state)
-            
             new_window.SetIcon(icon)
             self.AddPage(new_window, "")
             new_window.RefreshView()
@@ -2108,14 +2015,14 @@ class IDEFrame(wx.Frame):
                     elif isinstance(editor, GraphicViewer):
                         editor.ResetView(True)
                     else:
-                        editor.RefreshView()
+                        editor.SubscribeAllDataConsumers()
                 elif editor.IsDebugging():
-                    editor.RegisterVariables()
-            self.DebugVariablePanel.UnregisterObsoleteData()
+                    editor.SubscribeAllDataConsumers()
+            self.DebugVariablePanel.SubscribeAllDataConsumers()
     
-    def AddDebugVariable(self, iec_path, force=False):
+    def AddDebugVariable(self, iec_path, force=False, graph=False):
         if self.EnableDebug:
-            self.DebugVariablePanel.InsertValue(iec_path, force=force)
+            self.DebugVariablePanel.InsertValue(iec_path, force=force, graph=graph)
             self.EnsureTabVisible(self.DebugVariablePanel)
             
 #-------------------------------------------------------------------------------
@@ -2349,7 +2256,7 @@ class IDEFrame(wx.Frame):
         def OnAddPouMenu(event):
             dialog = PouDialog(self, pou_type)
             dialog.SetPouNames(self.Controler.GetProjectPouNames())
-            dialog.SetPouElementNames(self.Controler.GetProjectPouVariables())
+            dialog.SetPouElementNames(self.Controler.GetProjectPouVariableNames())
             dialog.SetValues({"pouName": self.Controler.GenerateNewName(None, None, "%s%%d" % pou_type)})
             if dialog.ShowModal() == wx.ID_OK:
                 values = dialog.GetValues()
@@ -2364,7 +2271,7 @@ class IDEFrame(wx.Frame):
         def OnAddTransitionMenu(event):
             dialog = PouTransitionDialog(self)
             dialog.SetPouNames(self.Controler.GetProjectPouNames())
-            dialog.SetPouElementNames(self.Controler.GetProjectPouVariables(pou_name))
+            dialog.SetPouElementNames(self.Controler.GetProjectPouVariableNames(pou_name))
             dialog.SetValues({"transitionName": self.Controler.GenerateNewName(None, None, "transition%d")})
             if dialog.ShowModal() == wx.ID_OK: 
                 values = dialog.GetValues()
@@ -2379,7 +2286,7 @@ class IDEFrame(wx.Frame):
         def OnAddActionMenu(event):
             dialog = PouActionDialog(self)
             dialog.SetPouNames(self.Controler.GetProjectPouNames())
-            dialog.SetPouElementNames(self.Controler.GetProjectPouVariables(pou_name))
+            dialog.SetPouElementNames(self.Controler.GetProjectPouVariableNames(pou_name))
             dialog.SetValues({"actionName": self.Controler.GenerateNewName(None, None, "action%d")})
             if dialog.ShowModal() == wx.ID_OK:
                 values = dialog.GetValues()
@@ -2437,9 +2344,7 @@ class IDEFrame(wx.Frame):
         result = self.Controler.PastePou(pou_type, pou_xml)
 
         if not isinstance(result, TupleType):
-            message = wx.MessageDialog(self, result, _("Error"), wx.OK|wx.ICON_ERROR)
-            message.ShowModal()
-            message.Destroy()
+            self.ShowErrorMessage(result)
         else:
             self._Refresh(TITLE, EDITORTOOLBAR, FILEMENU, EDITMENU, PROJECTTREE, LIBRARYTREE)
             self.EditProjectElement(ITEM_POU, result[0])
@@ -2448,20 +2353,39 @@ class IDEFrame(wx.Frame):
 #                        Remove Project Elements Functions
 #-------------------------------------------------------------------------------
 
+    def CheckElementIsUsedBeforeDeletion(self, check_function, title, name):
+        if not check_function(name):
+            return True
+        
+        dialog = wx.MessageDialog(self, 
+            _("\"%s\" is used by one or more POUs. Do you wish to continue?") % name, 
+            title, wx.YES_NO|wx.ICON_QUESTION)
+        answer = dialog.ShowModal()
+        dialog.Destroy()
+        return answer == wx.ID_YES
+
+    def CheckDataTypeIsUsedBeforeDeletion(self, name):
+        return self.CheckElementIsUsedBeforeDeletion(
+            self.Controler.DataTypeIsUsed,
+            _("Remove Datatype"), name)
+    
+    def CheckPouIsUsedBeforeDeletion(self, name):
+        return self.CheckElementIsUsedBeforeDeletion(
+            self.Controler.PouIsUsed,
+            _("Remove Pou"), name)
+    
     def OnRemoveDataTypeMenu(self, event):
         selected = self.ProjectTree.GetSelection()
         if self.ProjectTree.GetPyData(selected)["type"] == ITEM_DATATYPE:
             name = self.ProjectTree.GetItemText(selected)
-            if not self.Controler.DataTypeIsUsed(name):
+            if self.CheckDataTypeIsUsedBeforeDeletion(name):
                 self.Controler.ProjectRemoveDataType(name)
                 tagname = self.Controler.ComputeDataTypeName(name)
                 idx = self.IsOpened(tagname)
                 if idx is not None:
                     self.TabsOpened.DeletePage(idx)
                 self._Refresh(TITLE, EDITORTOOLBAR, FILEMENU, EDITMENU, PROJECTTREE)
-            else:
-                self.ShowErrorMessage(_("\"%s\" is used by one or more POUs. It can't be removed!"))
-
+            
     def OnRenamePouMenu(self, event):
         selected = self.ProjectTree.GetSelection()
         if self.ProjectTree.GetPyData(selected)["type"] == ITEM_POU: 
@@ -2471,15 +2395,13 @@ class IDEFrame(wx.Frame):
         selected = self.ProjectTree.GetSelection()
         if self.ProjectTree.GetPyData(selected)["type"] == ITEM_POU:
             name = self.ProjectTree.GetItemText(selected)
-            if not self.Controler.PouIsUsed(name):
+            if self.CheckPouIsUsedBeforeDeletion(name):
                 self.Controler.ProjectRemovePou(name)
                 tagname = self.Controler.ComputePouName(name)
                 idx = self.IsOpened(tagname)
                 if idx is not None:
                     self.TabsOpened.DeletePage(idx)
                 self._Refresh(TITLE, EDITORTOOLBAR, FILEMENU, EDITMENU, PROJECTTREE, POUINSTANCEVARIABLESPANEL, LIBRARYTREE)
-            else:
-                self.ShowErrorMessage(_("\"%s\" is used by one or more POUs. It can't be removed!"))
 
     def OnRemoveTransitionMenu(self, event):
         selected = self.ProjectTree.GetSelection()

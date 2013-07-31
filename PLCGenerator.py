@@ -106,9 +106,9 @@ class ProgramGenerator:
     # Compute value according to type given
     def ComputeValue(self, value, var_type):
         base_type = self.Controler.GetBaseType(var_type)
-        if base_type == "STRING":
+        if base_type == "STRING" and not value.startswith("'") and not value.endswith("'"):
             return "'%s'"%value
-        elif base_type == "WSTRING":
+        elif base_type == "WSTRING" and not value.startswith('"') and not value.endswith('"'):
             return "\"%s\""%value
         return value
 
@@ -654,7 +654,16 @@ class PouProgramGenerator:
                     self.Interface.append((varTypeNames[varlist["name"]], option, False, variables))
                 if len(located) > 0:
                     self.Interface.append((varTypeNames[varlist["name"]], option, True, located))
-        
+    
+    LITERAL_TYPES = {
+        "T": "TIME",
+        "D": "DATE",
+        "TOD": "TIME_OF_DAY",
+        "DT": "DATE_AND_TIME",
+        "2": None,
+        "8": None,
+        "16": None,
+    }
     def ComputeConnectionTypes(self, pou):
         body = pou.getbody()
         if isinstance(body, ListType):
@@ -681,7 +690,9 @@ class PouProgramGenerator:
                     elif var_type is None:
                         parts = expression.split("#")
                         if len(parts) > 1:
-                            var_type = parts[0]
+                            literal_prefix = parts[0].upper()
+                            var_type = self.LITERAL_TYPES.get(literal_prefix, 
+                                                              literal_prefix)
                         elif expression.startswith("'"):
                             var_type = "STRING"
                         elif expression.startswith('"'):
@@ -883,17 +894,18 @@ class PouProgramGenerator:
             otherInstances["outVariables&coils"].sort(SortInstances)
             otherInstances["blocks"].sort(SortInstances)
             instances = [instance for (executionOrderId, instance) in orderedInstances]
-            instances.extend(otherInstances["connectors"] + otherInstances["outVariables&coils"] + otherInstances["blocks"])
+            instances.extend(otherInstances["outVariables&coils"] + otherInstances["blocks"] + otherInstances["connectors"])
             for instance in instances:
                 if isinstance(instance, (plcopen.fbdObjects_outVariable, plcopen.fbdObjects_inOutVariable)):
                     connections = instance.connectionPointIn.getconnections()
                     if connections is not None:
                         expression = self.ComputeExpression(body, connections)
-                        self.Program += [(self.CurrentIndent, ()),
-                                         (instance.getexpression(), (self.TagName, "io_variable", instance.getlocalId(), "expression")),
-                                         (" := ", ())]
-                        self.Program += expression
-                        self.Program += [(";\n", ())]
+                        if expression is not None:
+                            self.Program += [(self.CurrentIndent, ()),
+                                             (instance.getexpression(), (self.TagName, "io_variable", instance.getlocalId(), "expression")),
+                                             (" := ", ())]
+                            self.Program += expression
+                            self.Program += [(";\n", ())]
                 elif isinstance(instance, plcopen.fbdObjects_block):
                     block_type = instance.gettypeName()
                     self.ParentGenerator.GeneratePouProgram(block_type)
@@ -902,20 +914,27 @@ class PouProgramGenerator:
                         block_infos = self.GetBlockType(block_type)
                     if block_infos is None:
                         raise PLCGenException, _("Undefined block type \"%s\" in \"%s\" POU")%(block_type, self.Name)
-                    block_infos["generate"](self, instance, block_infos, body, None)
+                    try:
+                        block_infos["generate"](self, instance, block_infos, body, None)
+                    except ValueError, e:
+                        raise PLCGenException, e.message
                 elif isinstance(instance, plcopen.commonObjects_connector):
                     connector = instance.getname()
                     if self.ComputedConnectors.get(connector, None):
-                        continue 
-                    self.ComputedConnectors[connector] = self.ComputeExpression(body, instance.connectionPointIn.getconnections())
+                        continue
+                    expression = self.ComputeExpression(body, instance.connectionPointIn.getconnections())
+                    if expression is not None:
+                        self.ComputedConnectors[connector] = expression
                 elif isinstance(instance, plcopen.ldObjects_coil):
                     connections = instance.connectionPointIn.getconnections()
                     if connections is not None:
                         coil_info = (self.TagName, "coil", instance.getlocalId())
-                        expression = self.ExtractModifier(instance, self.ComputeExpression(body, connections), coil_info)
-                        self.Program += [(self.CurrentIndent, ())]
-                        self.Program += [(instance.getvariable(), coil_info + ("reference",))]
-                        self.Program += [(" := ", ())] + expression + [(";\n", ())]
+                        expression = self.ComputeExpression(body, connections)
+                        if expression is not None:
+                            expression = self.ExtractModifier(instance, expression, coil_info)
+                            self.Program += [(self.CurrentIndent, ())]
+                            self.Program += [(instance.getvariable(), coil_info + ("reference",))]
+                            self.Program += [(" := ", ())] + expression + [(";\n", ())]
                         
     def FactorizePaths(self, paths):
         same_paths = {}
@@ -961,7 +980,10 @@ class PouProgramGenerator:
                     block_infos = self.GetBlockType(block_type)
                 if block_infos is None:
                     raise PLCGenException, _("Undefined block type \"%s\" in \"%s\" POU")%(block_type, self.Name)
-                paths.append(str(block_infos["generate"](self, next, block_infos, body, connection, order, to_inout)))
+                try:
+                    paths.append(str(block_infos["generate"](self, next, block_infos, body, connection, order, to_inout)))
+                except ValueError, e:
+                    raise PLCGenException, e.message
             elif isinstance(next, plcopen.commonObjects_continuation):
                 name = next.getname()
                 computed_value = self.ComputedConnectors.get(name, None)
@@ -978,8 +1000,9 @@ class PouProgramGenerator:
                         connections = connector.connectionPointIn.getconnections()
                         if connections is not None:
                             expression = self.ComputeExpression(body, connections, order)
-                            self.ComputedConnectors[name] = expression
-                            paths.append(str(expression))
+                            if expression is not None:
+                                self.ComputedConnectors[name] = expression
+                                paths.append(str(expression))
                     else:
                         raise PLCGenException, _("No connector found corresponding to \"%s\" continuation in \"%s\" POU")%(name, self.Name)
             elif isinstance(next, plcopen.ldObjects_contact):
@@ -1022,6 +1045,8 @@ class PouProgramGenerator:
 
     def ComputeExpression(self, body, connections, order = False, to_inout = False):
         paths = self.GeneratePaths(connections, body, order, to_inout)
+        if len(paths) == 0:
+            return None
         if len(paths) > 1:
             factorized_paths = self.FactorizePaths(paths)
             if len(factorized_paths) > 1:
@@ -1245,9 +1270,10 @@ class PouProgramGenerator:
                             connections = instance.connectionPointIn.getconnections()
                             if connections is not None:
                                 expression = self.ComputeExpression(transitionBody, connections)
-                                transition_infos["content"] = [("\n%s:= "%self.CurrentIndent, ())] + expression + [(";\n", ())]
-                                self.SFCComputedBlocks += self.Program
-                                self.Program = []
+                                if expression is not None:
+                                    transition_infos["content"] = [("\n%s:= "%self.CurrentIndent, ())] + expression + [(";\n", ())]
+                                    self.SFCComputedBlocks += self.Program
+                                    self.Program = []
                     if not transition_infos.has_key("content"):
                         raise PLCGenException, _("Transition \"%s\" body must contain an output variable or coil referring to its name") % transitionValues["value"]
                 self.TagName = previous_tagname
@@ -1258,9 +1284,10 @@ class PouProgramGenerator:
                 connections = transition.getconnections()
                 if connections is not None:
                     expression = self.ComputeExpression(body, connections)
-                    transition_infos["content"] = [("\n%s:= "%self.CurrentIndent, ())] + expression + [(";\n", ())]
-                    self.SFCComputedBlocks += self.Program
-                    self.Program = []
+                    if expression is not None:
+                        transition_infos["content"] = [("\n%s:= "%self.CurrentIndent, ())] + expression + [(";\n", ())]
+                        self.SFCComputedBlocks += self.Program
+                        self.Program = []
             for step in steps:
                 self.GenerateSFCStep(step, pou)
                 step_name = step.getname()

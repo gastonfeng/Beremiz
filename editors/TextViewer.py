@@ -31,6 +31,7 @@ import wx.stc
 from graphics.GraphicCommons import ERROR_HIGHLIGHT, SEARCH_RESULT_HIGHLIGHT, REFRESH_HIGHLIGHT_PERIOD
 from plcopen.structures import ST_BLOCK_START_KEYWORDS, ST_BLOCK_END_KEYWORDS, IEC_BLOCK_START_KEYWORDS, IEC_BLOCK_END_KEYWORDS, LOCATIONDATATYPES
 from EditorPanel import EditorPanel
+from controls.CustomStyledTextCtrl import CustomStyledTextCtrl, faces, GetCursorPos, NAVIGATION_KEYS
 
 #-------------------------------------------------------------------------------
 #                         Textual programs Viewer class
@@ -52,20 +53,6 @@ for i in xrange(26):
 [ID_TEXTVIEWER, ID_TEXTVIEWERTEXTCTRL,
 ] = [wx.NewId() for _init_ctrls in range(2)]
 
-if wx.Platform == '__WXMSW__':
-    faces = { 'times': 'Times New Roman',
-              'mono' : 'Courier New',
-              'helv' : 'Arial',
-              'other': 'Comic Sans MS',
-              'size' : 10,
-             }
-else:
-    faces = { 'times': 'Times',
-              'mono' : 'Courier',
-              'helv' : 'Helvetica',
-              'other': 'new century schoolbook',
-              'size' : 12,
-             }
 re_texts = {}
 re_texts["letter"] = "[A-Za-z]"
 re_texts["digit"] = "[0-9]"
@@ -78,27 +65,6 @@ HIGHLIGHT_TYPES = {
     ERROR_HIGHLIGHT: STC_PLC_ERROR,
     SEARCH_RESULT_HIGHLIGHT: STC_PLC_SEARCH_RESULT,
 }
-
-def GetCursorPos(old, new):
-    old_length = len(old)
-    new_length = len(new)
-    common_length = min(old_length, new_length)
-    i = 0
-    for i in xrange(common_length):
-        if old[i] != new[i]:
-            break
-    if old_length < new_length:
-        if common_length > 0 and old[i] != new[i]:
-            return i + new_length - old_length
-        else:
-            return i + new_length - old_length + 1
-    elif old_length > new_length or i < min(old_length, new_length) - 1:
-        if common_length > 0 and old[i] != new[i]:
-            return i
-        else:
-            return i + 1
-    else:
-        return None
 
 def LineStartswith(line, symbols):
     return reduce(lambda x, y: x or y, map(lambda x: line.startswith(x), symbols), False)
@@ -115,7 +81,7 @@ class TextViewer(EditorPanel):
                 event(self, function)
     
     def _init_Editor(self, prnt):
-        self.Editor = wx.stc.StyledTextCtrl(id=ID_TEXTVIEWERTEXTCTRL, 
+        self.Editor = CustomStyledTextCtrl(id=ID_TEXTVIEWERTEXTCTRL, 
                 parent=prnt, name="TextViewer", size=wx.Size(0, 0), style=0)
         self.Editor.ParentWindow = self
         
@@ -175,6 +141,7 @@ class TextViewer(EditorPanel):
 
         self.Bind(wx.stc.EVT_STC_STYLENEEDED, self.OnStyleNeeded, id=ID_TEXTVIEWERTEXTCTRL)
         self.Editor.Bind(wx.stc.EVT_STC_MARGINCLICK, self.OnMarginClick)
+        self.Editor.Bind(wx.stc.EVT_STC_UPDATEUI, self.OnUpdateUI)
         self.Editor.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
         if self.Controler is not None:
             self.Editor.Bind(wx.EVT_KILL_FOCUS, self.OnKillFocus)
@@ -196,13 +163,12 @@ class TextViewer(EditorPanel):
         self.DisableEvents = True
         self.TextSyntax = None
         self.CurrentAction = None
-        self.Highlights = []
-        self.SearchParams = None
-        self.SearchResults = None
-        self.CurrentFindHighlight = None
+        
         self.InstancePath = instancepath
         self.ContextStack = []
         self.CallStack = []
+        
+        self.ResetSearchResults()
         
         self.RefreshHighlightsTimer = wx.Timer(self, -1)
         self.Bind(wx.EVT_TIMER, self.OnRefreshHighlightsTimer, self.RefreshHighlightsTimer)
@@ -247,13 +213,12 @@ class TextViewer(EditorPanel):
     def GetCurrentPos(self):
         return self.Editor.GetCurrentPos()
     
-    def GetState(self):
-        return {"cursor_pos": self.Editor.GetCurrentPos()}
+    def ResetSearchResults(self):
+        self.Highlights = []
+        self.SearchParams = None
+        self.SearchResults = None
+        self.CurrentFindHighlight = None
     
-    def SetState(self, state):
-        if self and state.has_key("cursor_pos"):
-            self.Editor.GotoPos(state.get("cursor_pos", 0))
-        
     def OnModification(self, event):
         if not self.DisableEvents:
             mod_type = event.GetModificationType()
@@ -452,17 +417,20 @@ class TextViewer(EditorPanel):
             self.ResetBuffer()
             self.DisableEvents = True
             old_cursor_pos = self.GetCurrentPos()
+            line = self.Editor.GetFirstVisibleLine()
+            column = self.Editor.GetXOffset()
             old_text = self.GetText()
             new_text = self.Controler.GetEditedElementText(self.TagName, self.Debug)
-            self.SetText(new_text)
-            new_cursor_pos = GetCursorPos(old_text, new_text)
-            if new_cursor_pos != None:
-                self.Editor.GotoPos(new_cursor_pos)
-            else:
-                self.Editor.GotoPos(old_cursor_pos)
-            self.Editor.ScrollToColumn(0)
-            self.RefreshJumpList()
-            self.Editor.EmptyUndoBuffer()
+            if old_text != new_text:
+                self.SetText(new_text)
+                new_cursor_pos = GetCursorPos(old_text, new_text)
+                self.Editor.LineScroll(column, line)
+                if new_cursor_pos != None:
+                    self.Editor.GotoPos(new_cursor_pos)
+                else:
+                    self.Editor.GotoPos(old_cursor_pos)
+                self.RefreshJumpList()
+                self.Editor.EmptyUndoBuffer()
             self.DisableEvents = False
             
             self.RefreshVariableTree()
@@ -585,7 +553,8 @@ class TextViewer(EditorPanel):
                 else:
                     self.SetStyling(current_pos - last_styled_pos, 31)
                 last_styled_pos = current_pos
-                state = SPACE
+                if state != DPRAGMA:
+                    state = SPACE
                 line = ""
                 line_number += 1
                 self.RefreshLineFolding(line_number)
@@ -617,7 +586,7 @@ class TextViewer(EditorPanel):
                     state = SPACE
             elif state == DPRAGMA:
                 if line.endswith("}}"):
-                    self.SetStyling(current_pos - last_styled_pos + 2, 31)
+                    self.SetStyling(current_pos - last_styled_pos + 1, 31)
                     last_styled_pos = current_pos + 1
                     state = SPACE
             elif (line.endswith("'") or line.endswith('"')) and state not in [STRING, WSTRING]:
@@ -751,7 +720,13 @@ class TextViewer(EditorPanel):
             if self.Editor.GetFoldLevel(line) & wx.stc.STC_FOLDLEVELHEADERFLAG:
                 self.Editor.ToggleFold(line)
         event.Skip()
-        
+    
+    def OnUpdateUI(self, event):
+        selected = self.Editor.GetSelectedText()
+        if self.ParentWindow and selected != "":
+            self.ParentWindow.SetCopyBuffer(selected, True)
+        event.Skip()
+    
     def Cut(self):
         self.ResetBuffer()
         self.DisableEvents = True
@@ -762,6 +737,8 @@ class TextViewer(EditorPanel):
     
     def Copy(self):
         self.Editor.CmdKeyExecute(wx.stc.STC_CMD_COPY)
+        if self.ParentWindow:
+            self.ParentWindow.RefreshEditMenu()
     
     def Paste(self):
         self.ResetBuffer()
@@ -770,6 +747,9 @@ class TextViewer(EditorPanel):
         self.DisableEvents = False
         self.RefreshModel()
         self.RefreshBuffer()
+    
+    def Search(self, criteria):
+        return self.Controler.SearchInPou(self.TagName, criteria, self.Debug)
     
     def Find(self, direction, search_params):
         if self.SearchParams != search_params:
@@ -786,7 +766,8 @@ class TextViewer(EditorPanel):
             self.SearchResults = [
                 (infos[1:], start, end, SEARCH_RESULT_HIGHLIGHT)
                 for infos, start, end, text in 
-                self.Controler.SearchInPou(self.TagName, criteria, self.Debug)]
+                self.Search(criteria)]
+            self.CurrentFindHighlight = None
         
         if len(self.SearchResults) > 0:
             if self.CurrentFindHighlight is not None:
@@ -811,13 +792,15 @@ class TextViewer(EditorPanel):
     def RefreshModel(self):
         self.RefreshJumpList()
         self.Controler.SetEditedElementText(self.TagName, self.GetText())
+        self.ResetSearchResults()
     
     def OnKeyDown(self, event):
+        key = event.GetKeyCode()
         if self.Controler is not None:
         
             if self.Editor.CallTipActive():
                 self.Editor.CallTipCancel()
-            key = event.GetKeyCode()
+            
             key_handled = False
 
             line = self.Editor.GetCurrentLine()
@@ -871,6 +854,8 @@ class TextViewer(EditorPanel):
                         key_handled = True
             if not key_handled:
                 event.Skip()
+        elif key in NAVIGATION_KEYS:
+            event.Skip()
 
     def OnKillFocus(self, event):
         self.Editor.AutoCompCancel()

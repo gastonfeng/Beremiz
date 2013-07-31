@@ -89,6 +89,7 @@ CheckOptionForClass = {"Local": lambda x: x,
                       }
 
 LOCATION_MODEL = re.compile("((?:%[IQM](?:\*|(?:[XBWLD]?[0-9]+(?:\.[0-9]+)*)))?)$")
+VARIABLE_NAME_SUFFIX_MODEL = re.compile("([0-9]*)$")
 
 #-------------------------------------------------------------------------------
 #                            Variables Panel Table
@@ -166,11 +167,8 @@ class VariableTable(CustomTable):
                     elif col != 0 and self.GetValueByName(row, "Edit"):
                         grid.SetReadOnly(row, col, False)
                         if colname == "Name":
-                            if self.Parent.PouIsUsed and var_class in ["Input", "Output", "InOut"]:
-                                grid.SetReadOnly(row, col, True)
-                            else:
-                                editor = wx.grid.GridCellTextEditor()
-                                renderer = wx.grid.GridCellStringRenderer()
+                            editor = wx.grid.GridCellTextEditor()
+                            renderer = wx.grid.GridCellStringRenderer()
                         elif colname == "Initial Value":
                             if var_class not in ["External", "InOut"]:
                                 if self.Parent.Controler.IsEnumeratedType(var_type):
@@ -188,13 +186,11 @@ class VariableTable(CustomTable):
                             else:
                                 grid.SetReadOnly(row, col, True)
                         elif colname == "Class":
-                            if len(self.Parent.ClassList) == 1 or self.Parent.PouIsUsed and var_class in ["Input", "Output", "InOut"]:
+                            if len(self.Parent.ClassList) == 1:
                                 grid.SetReadOnly(row, col, True)
                             else:
                                 editor = wx.grid.GridCellChoiceEditor()
                                 excluded = []
-                                if self.Parent.PouIsUsed:
-                                    excluded.extend(["Input","Output","InOut"])
                                 if self.Parent.IsFunctionBlockType(var_type):
                                     excluded.extend(["Local","Temp"])
                                 editor.SetParameters(",".join([_(choice) for choice in self.Parent.ClassList if choice not in excluded]))
@@ -302,22 +298,61 @@ class VariableDropTarget(wx.TextDropTarget):
                         self.ParentWindow.Table.SetValue(row, col, values[0])
                         self.ParentWindow.Table.ResetView(self.ParentWindow.VariablesGrid)
                         self.ParentWindow.SaveValues()
-            elif (element_type not in ["config", "resource"] and values[1] == "Global" and self.ParentWindow.Filter in ["All", "Interface", "External"] or
-                  element_type in ["config", "resource"] and values[1] == "location"):
+            elif (element_type not in ["config", "resource", "function"] and values[1] == "Global" and 
+                  self.ParentWindow.Filter in ["All", "Interface", "External"] or
+                  element_type != "function" and values[1] == "location"):
                 if values[1] == "location":
                     var_name = values[3]
                 else:
                     var_name = values[0]
                 tagname = self.ParentWindow.GetTagName()
-                if var_name.upper() in [name.upper() for name in self.ParentWindow.Controler.GetProjectPouNames(self.ParentWindow.Debug)]:
+                if var_name.upper() in [name.upper() 
+                        for name in self.ParentWindow.Controler.\
+                            GetProjectPouNames(self.ParentWindow.Debug)]:
                     message = _("\"%s\" pou already exists!")%var_name
-                elif not var_name.upper() in [name.upper() for name in self.ParentWindow.Controler.GetEditedElementVariables(tagname, self.ParentWindow.Debug)]:
+                elif not var_name.upper() in [name.upper() 
+                        for name in self.ParentWindow.Controler.\
+                            GetEditedElementVariables(tagname, self.ParentWindow.Debug)]:
                     var_infos = self.ParentWindow.DefaultValue.copy()
                     var_infos["Name"] = var_name
                     var_infos["Type"] = values[2]
                     if values[1] == "location":
-                        var_infos["Class"] = "Global"
-                        var_infos["Location"] = values[0]
+                        location = values[0]
+                        if not location.startswith("%"):
+                            dialog = wx.SingleChoiceDialog(self.ParentWindow.ParentWindow.ParentWindow, 
+                                  _("Select a variable class:"), _("Variable class"), 
+                                  ["Input", "Output", "Memory"], 
+                                  wx.DEFAULT_DIALOG_STYLE|wx.OK|wx.CANCEL)
+                            if dialog.ShowModal() == wx.ID_OK:
+                                selected = dialog.GetSelection()
+                            else:
+                                selected = None
+                            dialog.Destroy()
+                            if selected is None:
+                                return
+                            if selected == 0:
+                                location = "%I" + location
+                            elif selected == 1:
+                                location = "%Q" + location
+                            else:
+                                location = "%M" + location
+                        if element_type == "functionBlock":
+                            configs = self.ParentWindow.Controler.GetProjectConfigNames(
+                                                                self.ParentWindow.Debug)
+                            if len(configs) == 0:
+                                return
+                            if not var_name.upper() in [name.upper() 
+                                for name in self.ParentWindow.Controler.\
+                                    GetConfigurationVariableNames(configs[0])]:
+                                self.ParentWindow.Controler.AddConfigurationGlobalVar(
+                                    configs[0], values[2], var_name, location, "")
+                            var_infos["Class"] = "External"
+                        else:
+                            if element_type == "program":
+                                var_infos["Class"] = "Local"
+                            else:
+                                var_infos["Class"] = "Global"
+                            var_infos["Location"] = location
                     else:
                         var_infos["Class"] = "External"
                     var_infos["Number"] = len(self.ParentWindow.Values)
@@ -486,34 +521,56 @@ class VariablePanel(wx.Panel):
         self.VariablesGrid.SetEditable(not self.Debug)
         
         def _AddVariable(new_row):
-            if not self.PouIsUsed or self.Filter not in ["Interface", "Input", "Output", "InOut"]:
+            if new_row > 0:
+                row_content = self.Values[new_row - 1].copy()
+                
+                result = VARIABLE_NAME_SUFFIX_MODEL.search(row_content["Name"])
+                if result is not None:
+                    name = row_content["Name"][:result.start(1)]
+                    suffix = result.group(1)
+                    if suffix != "":
+                        start_idx = int(suffix)
+                    else:
+                        start_idx = 0
+                else:
+                    name = row_content["Name"]
+                    start_idx = 0
+            else:
+                row_content = None
+                start_idx = 0
+                name = "LocalVar"
+                
+            if row_content is not None and row_content["Edit"]: 
+                row_content = self.Values[new_row - 1].copy()
+            else:
                 row_content = self.DefaultValue.copy()
                 if self.Filter in self.DefaultTypes:
                     row_content["Class"] = self.DefaultTypes[self.Filter]
                 else:
                     row_content["Class"] = self.Filter
-                if self.Filter == "All" and len(self.Values) > 0:
-                    self.Values.insert(new_row, row_content)
-                else:
-                    self.Values.append(row_content)
-                    new_row = self.Table.GetNumberRows()
-                self.SaveValues()
-                self.RefreshValues()
-                return new_row
-            return self.VariablesGrid.GetGridCursorRow()
+            
+            row_content["Name"] = self.Controler.GenerateNewName(
+                    self.TagName, None, name + "%d", start_idx)
+            
+            if self.Filter == "All" and len(self.Values) > 0:
+                self.Values.insert(new_row, row_content)
+            else:
+                self.Values.append(row_content)
+                new_row = self.Table.GetNumberRows()
+            self.SaveValues()
+            self.RefreshValues()
+            return new_row
         setattr(self.VariablesGrid, "_AddRow", _AddVariable)
         
         def _DeleteVariable(row):
-            if (self.Table.GetValueByName(row, "Edit") and 
-                (not self.PouIsUsed or self.Table.GetValueByName(row, "Class") not in ["Input", "Output", "InOut"])):
+            if self.Table.GetValueByName(row, "Edit"):
                 self.Values.remove(self.Table.GetRow(row))
                 self.SaveValues()
                 self.RefreshValues()
         setattr(self.VariablesGrid, "_DeleteRow", _DeleteVariable)
             
         def _MoveVariable(row, move):
-            if (self.Filter == "All" and 
-                (not self.PouIsUsed or self.Table.GetValueByName(row, "Class") not in ["Input", "Output", "InOut"])):
+            if self.Filter == "All":
                 new_row = max(0, min(row + move, len(self.Values) - 1))
                 if new_row != row:
                     self.Values.insert(new_row, self.Values.pop(row))
@@ -532,12 +589,10 @@ class VariablePanel(wx.Panel):
                 if table_length > 0:
                     row = self.VariablesGrid.GetGridCursorRow()
                     row_edit = self.Table.GetValueByName(row, "Edit")
-                    if self.PouIsUsed:
-                        row_class = self.Table.GetValueByName(row, "Class")
-                self.AddButton.Enable(not self.Debug and (not self.PouIsUsed or self.Filter not in ["Interface", "Input", "Output", "InOut"]))
-                self.DeleteButton.Enable(not self.Debug and (table_length > 0 and row_edit and row_class not in ["Input", "Output", "InOut"]))
-                self.UpButton.Enable(not self.Debug and (table_length > 0 and row > 0 and self.Filter == "All" and row_class not in ["Input", "Output", "InOut"]))
-                self.DownButton.Enable(not self.Debug and (table_length > 0 and row < table_length - 1 and self.Filter == "All" and row_class not in ["Input", "Output", "InOut"]))
+                self.AddButton.Enable(not self.Debug)
+                self.DeleteButton.Enable(not self.Debug and (table_length > 0 and row_edit))
+                self.UpButton.Enable(not self.Debug and (table_length > 0 and row > 0 and self.Filter == "All"))
+                self.DownButton.Enable(not self.Debug and (table_length > 0 and row < table_length - 1 and self.Filter == "All"))
         setattr(self.VariablesGrid, "RefreshButtons", _RefreshButtons)
         
         self.VariablesGrid.SetRowLabelSize(0)
@@ -572,10 +627,8 @@ class VariablePanel(wx.Panel):
         
         words = self.TagName.split("::")
         if self.ElementType == "config":
-            self.PouIsUsed = False
             self.Values = self.Controler.GetConfigurationGlobalVars(words[1], self.Debug)
         elif self.ElementType == "resource":
-            self.PouIsUsed = False
             self.Values = self.Controler.GetConfigurationResourceGlobalVars(words[1], words[2], self.Debug)
         else:
             if self.ElementType == "function":
@@ -584,7 +637,6 @@ class VariablePanel(wx.Panel):
                     self.ReturnType.Append(data_type)
                 returnType = self.Controler.GetEditedElementInterfaceReturnType(self.TagName)
             description = self.Controler.GetPouDescription(words[1])
-            self.PouIsUsed = self.Controler.PouIsUsed(words[1])
             self.Values = self.Controler.GetEditedElementInterfaceVars(self.TagName, self.Debug)
         
         if returnType is not None:
@@ -625,7 +677,7 @@ class VariablePanel(wx.Panel):
         new_description = self.Description.GetValue()
         if new_description != old_description:
             self.Controler.SetPouDescription(words[1], new_description)
-            self.ParentWindow._Refresh(TITLE, FILEMENU, EDITMENU, POUINSTANCEVARIABLESPANEL, LIBRARYTREE)
+            self.ParentWindow._Refresh(TITLE, FILEMENU, EDITMENU, PAGETITLES, POUINSTANCEVARIABLESPANEL, LIBRARYTREE)
         event.Skip()
     
     def OnClassFilter(self, event):
@@ -666,13 +718,12 @@ class VariablePanel(wx.Panel):
                 if old_value != "":
                     self.Controler.UpdateEditedElementUsedVariable(self.TagName, old_value, value)
                 self.Controler.BufferProject()
-                self.ParentWindow.RefreshView(variablepanel = False)
-                self.ParentWindow._Refresh(TITLE, FILEMENU, EDITMENU, POUINSTANCEVARIABLESPANEL, LIBRARYTREE)
-                event.Skip()
+                wx.CallAfter(self.ParentWindow.RefreshView, False)
+                self.ParentWindow._Refresh(TITLE, FILEMENU, EDITMENU, PAGETITLES, POUINSTANCEVARIABLESPANEL, LIBRARYTREE)
         else:
             self.SaveValues()
             if colname == "Class":
-                self.ParentWindow.RefreshView(variablepanel = False)
+                wx.CallAfter(self.ParentWindow.RefreshView, False)
             elif colname == "Location":
                 wx.CallAfter(self.ParentWindow.RefreshView)
             
@@ -761,7 +812,7 @@ class VariablePanel(wx.Panel):
             self.SaveValues(False)
             self.ParentWindow.RefreshView(variablepanel = False)
             self.Controler.BufferProject()
-            self.ParentWindow._Refresh(TITLE, FILEMENU, EDITMENU, POUINSTANCEVARIABLESPANEL, LIBRARYTREE)
+            self.ParentWindow._Refresh(TITLE, FILEMENU, EDITMENU, PAGETITLES, POUINSTANCEVARIABLESPANEL, LIBRARYTREE)
         return VariableTypeFunction
     
     def VariableArrayTypeFunction(self, event):
@@ -775,7 +826,7 @@ class VariablePanel(wx.Panel):
             self.SaveValues(False)
             self.ParentWindow.RefreshView(variablepanel = False)
             self.Controler.BufferProject()
-            self.ParentWindow._Refresh(TITLE, FILEMENU, EDITMENU, POUINSTANCEVARIABLESPANEL, LIBRARYTREE)
+            self.ParentWindow._Refresh(TITLE, FILEMENU, EDITMENU, PAGETITLES, POUINSTANCEVARIABLESPANEL, LIBRARYTREE)
         dialog.Destroy()
     
     def OnVariablesGridCellLeftClick(self, event):
@@ -811,7 +862,7 @@ class VariablePanel(wx.Panel):
             self.Controler.SetPouInterfaceVars(words[1], self.Values)
         if buffer:
             self.Controler.BufferProject()
-            self.ParentWindow._Refresh(TITLE, FILEMENU, EDITMENU, POUINSTANCEVARIABLESPANEL, LIBRARYTREE)            
+            self.ParentWindow._Refresh(TITLE, FILEMENU, EDITMENU, PAGETITLES, POUINSTANCEVARIABLESPANEL, LIBRARYTREE)            
 
 #-------------------------------------------------------------------------------
 #                        Highlights showing functions

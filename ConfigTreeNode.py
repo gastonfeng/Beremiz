@@ -73,10 +73,12 @@ class ConfigTreeNode:
     def ConfNodePath(self):
         return os.path.join(self.CTNParent.ConfNodePath(), self.CTNType)
 
-    def CTNPath(self,CTNName=None):
+    def CTNPath(self,CTNName=None,project_path=None):
         if not CTNName:
             CTNName = self.CTNName()
-        return os.path.join(self.CTNParent.CTNPath(),
+        if not project_path:
+            project_path = self.CTNParent.CTNPath()
+        return os.path.join(project_path,
                             CTNName + NameTypeSeparator + self.CTNType)
     
     def CTNName(self):
@@ -113,7 +115,7 @@ class ConfigTreeNode:
     def RemoteExec(self, script, **kwargs):
         return self.CTNParent.RemoteExec(script, **kwargs)
     
-    def OnCTNSave(self):
+    def OnCTNSave(self, from_project_path=None):
         #Default, do nothing and return success
         return True
 
@@ -148,14 +150,16 @@ class ConfigTreeNode:
         parts = path.split(".", 1)
         if self.MandatoryParams and parts[0] == self.MandatoryParams[0]:
             self.MandatoryParams[1].setElementValue(parts[1], value)
+            value = self.MandatoryParams[1].getElementInfos(parts[0], parts[1])["value"]
         elif self.CTNParams and parts[0] == self.CTNParams[0]:
             self.CTNParams[1].setElementValue(parts[1], value)
+            value = self.CTNParams[1].getElementInfos(parts[0], parts[1])["value"]
         return value, False
 
     def CTNMakeDir(self):
         os.mkdir(self.CTNPath())
 
-    def CTNRequestSave(self):
+    def CTNRequestSave(self, from_project_path=None):
         if self.GetCTRoot().CheckProjectPathPerm(False):
             # If confnode do not have corresponding directory
             ctnpath = self.CTNPath()
@@ -178,7 +182,7 @@ class ConfigTreeNode:
                 XMLFile.close()
             
             # Call the confnode specific OnCTNSave method
-            result = self.OnCTNSave()
+            result = self.OnCTNSave(from_project_path)
             if not result:
                 return _("Error while saving \"%s\"\n")%self.CTNPath()
     
@@ -186,7 +190,10 @@ class ConfigTreeNode:
             self.ChangesToSave = False
             # go through all children and do the same
             for CTNChild in self.IterChildren():
-                result = CTNChild.CTNRequestSave()
+                CTNChildPath = None
+                if from_project_path is not None:
+                    CTNChildPath = CTNChild.CTNPath(project_path=from_project_path)
+                result = CTNChild.CTNRequestSave(CTNChildPath)
                 if result:
                     return result
         return None
@@ -465,6 +472,8 @@ class ConfigTreeNode:
         shutil.rmtree(CTNInstance.CTNPath())
         # Remove child of Children
         self.Children[CTNInstance.CTNType].remove(CTNInstance)
+        if len(self.Children[CTNInstance.CTNType]) == 0:
+            self.Children.pop(CTNInstance.CTNType)
         # Forget it... (View have to refresh)
 
     def CTNRemove(self):
