@@ -1,4 +1,4 @@
-import os, sys
+import os, sys, shutil
 
 base_folder = os.path.split(sys.path[0])[0]
 CanFestivalPath = os.path.join(base_folder, "CanFestival-3")
@@ -9,12 +9,12 @@ import wx
 from nodelist import NodeList
 from nodemanager import NodeManager
 import config_utils, gen_cfile, eds_utils
-from networkedit import networkedit
-from objdictedit import objdictedit
 import canfestival_config as local_canfestival_config
 from ConfigTreeNode import ConfigTreeNode
 from commondialogs import CreateNodeDialog
+from subindextable import IECTypeConversion, SizeConversion
 
+from PLCControler import LOCATION_CONFNODE, LOCATION_MODULE, LOCATION_GROUP, LOCATION_VAR_INPUT, LOCATION_VAR_OUTPUT, LOCATION_VAR_MEMORY
 from SlaveEditor import SlaveEditor, MasterViewer
 from NetworkEditor import NetworkEditor
 
@@ -24,6 +24,32 @@ setParanoia(0)
 
 from util.TranslationCatalogs import AddCatalog
 AddCatalog(os.path.join(CanFestivalPath, "objdictgen", "locale"))
+
+#--------------------------------------------------
+#              Location Tree Helper
+#--------------------------------------------------
+
+def GetSlaveLocationTree(slave_node, current_location, name):
+    entries = []
+    for index, subindex, size, entry_name in slave_node.GetMapVariableList():
+        subentry_infos = slave_node.GetSubentryInfos(index, subindex)
+        typeinfos = slave_node.GetEntryInfos(subentry_infos["type"])
+        if typeinfos:
+            entries.append({
+                "name": "0x%4.4x-0x%2.2x: %s" % (index, subindex, entry_name),
+                "type": LOCATION_VAR_MEMORY,
+                "size": size,
+                "IEC_type": IECTypeConversion.get(typeinfos["name"]),
+                "var_name": "%s_%4.4x_%2.2x" % ("_".join(name.split()), index, subindex),
+                "location": "%s%s"%(SizeConversion[size], ".".join(map(str, current_location + 
+                                                                                (index, subindex)))),
+                "description": "",
+                "children": []})
+    return  {"name": name,
+             "type": LOCATION_CONFNODE,
+             "location": ".".join([str(i) for i in current_location]) + ".x",
+             "children": entries
+    }
 
 #--------------------------------------------------
 #                    SLAVE
@@ -128,7 +154,7 @@ class _SlaveCTN(NodeManager):
     def CTNTestModified(self):
         return self.ChangesToSave or self.OneFileHasChanged()
         
-    def OnCTNSave(self):
+    def OnCTNSave(self, from_project_path=None):
         return self.SaveCurrentInFile(self.GetSlaveODPath())
 
     def SetParamsAttribute(self, path, value):
@@ -139,7 +165,13 @@ class _SlaveCTN(NodeManager):
             self._View.SetBusId(self.GetCurrentLocation())
         
         return result
-        
+    
+    def GetVariableLocationTree(self):
+        current_location = self.GetCurrentLocation()
+        return GetSlaveLocationTree(self.CurrentNode, 
+                                    self.GetCurrentLocation(), 
+                                    self.BaseParams.getName())
+    
     def CTNGenerate_C(self, buildpath, locations):
         """
         Generate C code
@@ -277,7 +309,23 @@ class _NodeListCTN(NodeList):
         if refresh_network and self._View is not None:
             wx.CallAfter(self._View.RefreshBufferState)
         return value, refresh
-        
+    
+    def GetVariableLocationTree(self):
+        current_location = self.GetCurrentLocation()
+        nodeindexes = self.SlaveNodes.keys()
+        nodeindexes.sort()
+        return {"name": self.BaseParams.getName(),
+                 "type": LOCATION_CONFNODE,
+                 "location": self.GetFullIEC_Channel(),
+                 "children": [GetSlaveLocationTree(self.Manager.GetCurrentNodeCopy(),
+                                                   current_location,
+                                                   _("Local entries"))] + 
+                             [GetSlaveLocationTree(self.SlaveNodes[nodeid]["Node"], 
+                                                   current_location + (nodeid,), 
+                                                   self.SlaveNodes[nodeid]["Name"])
+                              for nodeid in nodeindexes]
+        }
+    
     _GeneratedMasterView = None
     def _ShowGeneratedMaster(self):
         self._OpenView("Generated master")
@@ -330,8 +378,11 @@ class _NodeListCTN(NodeList):
     def CTNTestModified(self):
         return self.ChangesToSave or self.HasChanged()
         
-    def OnCTNSave(self):
+    def OnCTNSave(self, from_project_path=None):
         self.SetRoot(self.CTNPath())
+        if from_project_path is not None:
+            shutil.copytree(self.GetEDSFolder(from_project_path), 
+                            self.GetEDSFolder())
         return self.SaveProject() is None
 
     def CTNGenerate_C(self, buildpath, locations):
@@ -412,7 +463,8 @@ class RootClass:
             if can_driver not in can_drivers :
                 can_driver = can_drivers[0]
             can_drv_ext = self.GetCTRoot().GetBuilder().extension
-            can_driver_name = "libcanfestival_" + can_driver + can_drv_ext
+            can_drv_prefix = self.GetCTRoot().GetBuilder().dlopen_prefix
+            can_driver_name = can_drv_prefix + "libcanfestival_" + can_driver + can_drv_ext
         else:
             can_driver_name = ""
 

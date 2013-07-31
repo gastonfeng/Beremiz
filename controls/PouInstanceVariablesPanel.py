@@ -52,11 +52,10 @@ class PouInstanceVariablesPanel(wx.Panel):
         self.InstanceChoice = wx.ComboBox(self, size=wx.Size(0, 0), style=wx.CB_READONLY)
         self.Bind(wx.EVT_COMBOBOX, self.OnInstanceChoiceChanged,
                 self.InstanceChoice)
-        self.InstanceChoice.Bind(wx.EVT_LEFT_DOWN, self.OnInstanceChoiceLeftDown)
         
         self.DebugButton = wx.lib.buttons.GenBitmapButton(self, 
               bitmap=GetBitmap("debug_instance"), size=wx.Size(28, 28), style=wx.NO_BORDER)
-        self.ParentButton.SetToolTipString(_("Debug instance"))
+        self.DebugButton.SetToolTipString(_("Debug instance"))
         self.Bind(wx.EVT_BUTTON, self.OnDebugButtonClick, 
                 self.DebugButton)
         
@@ -74,6 +73,7 @@ class PouInstanceVariablesPanel(wx.Panel):
         self.VariablesList.Bind(CT.EVT_TREE_ITEM_ACTIVATED,
                 self.OnVariablesListItemActivated)
         self.VariablesList.Bind(wx.EVT_LEFT_DOWN, self.OnVariablesListLeftDown)
+        self.VariablesList.Bind(wx.EVT_KEY_DOWN, self.OnVariablesListKeyDown)
         
         buttons_sizer = wx.FlexGridSizer(cols=3, hgap=0, rows=1, vgap=0)
         buttons_sizer.AddWindow(self.ParentButton)
@@ -112,16 +112,21 @@ class PouInstanceVariablesPanel(wx.Panel):
         self.RefreshView()
     
     def SetPouType(self, tagname, pou_instance=None):
-        if  self.Controller is not None:
-            self.PouTagName = tagname
-            if self.PouTagName == "Project":
+        if self.Controller is not None:
+            if tagname == "Project":
                 config_name = self.Controller.GetProjectMainConfigurationName()
                 if config_name is not None:
-                    self.PouTagName = self.Controller.ComputeConfigurationName(config_name)
+                    tagname = self.Controller.ComputeConfigurationName(config_name)
             if pou_instance is not None:
                 self.PouInstance = pou_instance
-        
-        self.RefreshView()
+            
+            if self.PouTagName != tagname:
+                self.PouTagName = tagname
+                self.RefreshView()
+            else:
+                self.RefreshInstanceChoice()
+        else:
+            self.RefreshView()
     
     def ResetView(self):
         self.Controller = None
@@ -133,9 +138,8 @@ class PouInstanceVariablesPanel(wx.Panel):
         self.RefreshView()
     
     def RefreshView(self):
+        self.Freeze()
         self.VariablesList.DeleteAllItems()
-        self.InstanceChoice.Clear()
-        self.InstanceChoice.SetValue("")
         
         if self.Controller is not None and self.PouTagName is not None:
             self.PouInfos = self.Controller.GetPouVariables(self.PouTagName, self.Debug)
@@ -173,6 +177,7 @@ class PouInstanceVariablesPanel(wx.Panel):
                           bitmap=GetBitmap("debug_instance"), 
                           size=wx.Size(28, 28), style=wx.NO_BORDER)
                     self.Bind(wx.EVT_BUTTON, self.GenDebugButtonCallback(var_infos), debug_button)
+                    debug_button.Bind(wx.EVT_LEFT_DCLICK, self.GenDebugButtonDClickCallback(var_infos))
                     buttons.append(debug_button)
                 
                 button_num = len(buttons)
@@ -194,6 +199,15 @@ class PouInstanceVariablesPanel(wx.Panel):
                 self.VariablesList.SetItemImage(item, self.ParentWindow.GetTreeImage(var_infos["class"]))
                 self.VariablesList.SetPyData(item, var_infos)
             
+        self.RefreshInstanceChoice()
+        self.RefreshButtons()
+        
+        self.Thaw()
+    
+    def RefreshInstanceChoice(self):
+        self.InstanceChoice.Clear()
+        self.InstanceChoice.SetValue("")
+        if self.Controller is not None and self.PouInfos is not None:
             instances = self.Controller.SearchPouInstances(self.PouTagName, self.Debug)
             for instance in instances:
                 self.InstanceChoice.Append(instance)
@@ -207,9 +221,7 @@ class PouInstanceVariablesPanel(wx.Panel):
             else:
                 self.PouInstance = None
                 self.InstanceChoice.SetValue(_("Select an instance"))
-        
-        self.RefreshButtons()
-        
+    
     def RefreshButtons(self):
         enabled = self.InstanceChoice.GetSelection() != -1
         self.ParentButton.Enable(enabled and self.PouInfos["class"] != ITEM_CONFIGURATION)
@@ -278,6 +290,18 @@ class PouInstanceVariablesPanel(wx.Panel):
             event.Skip()
         return DebugButtonCallback
     
+    def GenDebugButtonDClickCallback(self, infos):
+        def DebugButtonDClickCallback(event):
+            if self.InstanceChoice.GetSelection() != -1:
+                if infos["class"] in ITEMS_VARIABLE:
+                    self.ParentWindow.AddDebugVariable(
+                        "%s.%s" % (self.InstanceChoice.GetStringSelection(), 
+                                   infos["name"]), 
+                        force=True,
+                        graph=True)
+            event.Skip()
+        return DebugButtonDClickCallback
+    
     def GenGraphButtonCallback(self, infos):
         def GraphButtonCallback(event):
             if self.InstanceChoice.GetSelection() != -1:
@@ -321,21 +345,27 @@ class PouInstanceVariablesPanel(wx.Panel):
         event.Skip()
         
     def OnVariablesListItemActivated(self, event):
-        if self.InstanceChoice.GetSelection() != -1:
-            instance_path = self.InstanceChoice.GetStringSelection()
-            selected_item = event.GetItem()
-            if selected_item is not None and selected_item.IsOk():
-                item_infos = self.VariablesList.GetPyData(selected_item)
-                if item_infos is not None and item_infos["class"] not in ITEMS_VARIABLE:
-                    if item_infos["class"] == ITEM_RESOURCE:
+        selected_item = event.GetItem()
+        if selected_item is not None and selected_item.IsOk():
+            item_infos = self.VariablesList.GetPyData(selected_item)
+            if item_infos is not None and item_infos["class"] not in ITEMS_VARIABLE:
+                instance_path = self.InstanceChoice.GetStringSelection()
+                if item_infos["class"] == ITEM_RESOURCE:
+                    if instance_path != "":
                         tagname = self.Controller.ComputeConfigurationResourceName(
                                        instance_path, 
                                        item_infos["name"])
                     else:
-                        tagname = self.Controller.ComputePouName(item_infos["type"])
-                    item_path = "%s.%s" % (instance_path, item_infos["name"])
-                    wx.CallAfter(self.SetPouType, tagname, item_path)
-                    wx.CallAfter(self.ParentWindow.SelectProjectTreeItem, tagname)
+                        tagname = None
+                else:
+                    tagname = self.Controller.ComputePouName(item_infos["type"])
+                if tagname is not None:
+                    if instance_path != "":
+                        item_path = "%s.%s" % (instance_path, item_infos["name"])
+                    else:
+                        item_path = None
+                    self.SetPouType(tagname, item_path)
+                    self.ParentWindow.SelectProjectTreeItem(tagname)
         event.Skip()
     
     def OnVariablesListLeftDown(self, event):
@@ -347,12 +377,17 @@ class PouInstanceVariablesPanel(wx.Panel):
             if item is not None and flags & CT.TREE_HITTEST_ONITEMLABEL:
                 item_infos = self.VariablesList.GetPyData(item)
                 if item_infos is not None and item_infos["class"] in ITEMS_VARIABLE:
+                    self.ParentWindow.EnsureTabVisible(
+                        self.ParentWindow.DebugVariablePanel)
                     item_path = "%s.%s" % (instance_path, item_infos["name"])
                     data = wx.TextDataObject(str((item_path, "debug")))
                     dragSource = wx.DropSource(self.VariablesList)
                     dragSource.SetData(data)
                     dragSource.DoDragDrop()
         event.Skip()
-        
-    def OnInstanceChoiceLeftDown(self, event):
-        event.Skip()
+
+    def OnVariablesListKeyDown(self, event):
+        keycode = event.GetKeyCode()
+        if keycode != wx.WXK_LEFT:
+            event.Skip()
+

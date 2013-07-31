@@ -1598,14 +1598,14 @@ def generateGetElementInfos(factory, classinfos):
         if path is not None:
             parts = path.split(".", 1)
             if attributes.has_key(parts[0]):
-                if len(parts) != 0:
+                if len(parts) != 1:
                     raise ValueError("Wrong path!")
                 attr_type = gettypeinfos(attributes[parts[0]]["attr_type"]["basename"], 
                                          attributes[parts[0]]["attr_type"]["facets"])
                 value = getattr(self, parts[0], "")
             elif elements.has_key(parts[0]):
                 if elements[parts[0]]["elmt_type"]["type"] == SIMPLETYPE:
-                    if len(parts) != 0:
+                    if len(parts) != 1:
                         raise ValueError("Wrong path!")
                     attr_type = gettypeinfos(elements[parts[0]]["elmt_type"]["basename"], 
                                              elements[parts[0]]["elmt_type"]["facets"])
@@ -1620,6 +1620,11 @@ def generateGetElementInfos(factory, classinfos):
                         return attr.getElementInfos(parts[0])
                     else:
                         return attr.getElementInfos(parts[0], parts[1])
+            elif elements.has_key("content"):
+                if len(parts) > 0:
+                    return self.content["value"].getElementInfos(name, path)
+            elif classinfos.has_key("base"):
+                classinfos["base"].getElementInfos(name, path)
             else:
                 raise ValueError("Wrong path!")
         else:
@@ -1669,6 +1674,13 @@ def generateSetElementValue(factory, classinfos):
                     raise ValueError("Wrong path!")
                 if attributes[parts[0]]["attr_type"]["basename"] == "boolean":
                     setattr(self, parts[0], value)
+                elif attributes[parts[0]]["use"] == "optional" and value == "":
+                    if attributes[parts[0]].has_key("default"):
+                        setattr(self, parts[0], 
+                            attributes[parts[0]]["attr_type"]["extract"](
+                                attributes[parts[0]]["default"], False))
+                    else:
+                        setattr(self, parts[0], None)
                 else:
                     setattr(self, parts[0], attributes[parts[0]]["attr_type"]["extract"](value, False))
             elif elements.has_key(parts[0]):
@@ -1677,6 +1689,8 @@ def generateSetElementValue(factory, classinfos):
                         raise ValueError("Wrong path!")
                     if elements[parts[0]]["elmt_type"]["basename"] == "boolean":
                         setattr(self, parts[0], value)
+                    elif attributes[parts[0]]["minOccurs"] == 0 and value == "":
+                        setattr(self, parts[0], None)
                     else:
                         setattr(self, parts[0], elements[parts[0]]["elmt_type"]["extract"](value, False))
                 else:
@@ -1848,9 +1862,11 @@ This function generate the classes from a class factory
 def GenerateClasses(factory):
     ComputedClasses = factory.CreateClasses()
     if factory.FileName is not None and len(ComputedClasses) == 1:
-        globals().update(ComputedClasses[factory.FileName])
+        UpdateXMLClassGlobals(ComputedClasses[factory.FileName])
         return ComputedClasses[factory.FileName]
     else:
-        globals().update(ComputedClasses)
+        UpdateXMLClassGlobals(ComputedClasses)
         return ComputedClasses
 
+def UpdateXMLClassGlobals(classes):
+    globals().update(classes)

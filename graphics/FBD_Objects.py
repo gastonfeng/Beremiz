@@ -24,7 +24,7 @@
 
 import wx
 
-from GraphicCommons import *
+from graphics.GraphicCommons import *
 from plcopen.structures import *
 
 #-------------------------------------------------------------------------------
@@ -179,17 +179,20 @@ class FBD_Block(Graphic_Element):
             output.MoveConnected(exclude)
     
     # Returns the block connector that starts with the point given if it exists 
-    def GetConnector(self, position, name = None):
-        # if a name is given
-        if name is not None:
-            # Test each input and output connector
-            #for input in self.Inputs:
-            #    if name == input.GetName():
-            #        return input
+    def GetConnector(self, position, output_name = None, input_name = None):
+        if input_name is not None:
+            # Test each input connector
+            for input in self.Inputs:
+                if input_name == input.GetName():
+                    return input
+        if output_name is not None:
+            # Test each output connector
             for output in self.Outputs:
-                if name == output.GetName():
+                if output_name == output.GetName():
                     return output
-        return self.FindNearestConnector(position, self.Inputs + self.Outputs)
+        if input_name is None and output_name is None:
+            return self.FindNearestConnector(position, self.Inputs + self.Outputs)
+        return None
         
     def GetInputTypes(self):
         return tuple([input.GetType(True) for input in self.Inputs if input.GetName() != "EN"])
@@ -263,43 +266,49 @@ class FBD_Block(Graphic_Element):
             self.Pen = MiterPen(self.Colour)
             
             # Extract the inputs properties and create or modify the corresponding connector
-            idx = 0
-            for idx, (input_name, input_type, input_modifier) in enumerate(inputs):
-                if idx < len(self.Inputs):
-                    connector = self.Inputs[idx]
-                    connector.SetName(input_name)
-                    connector.SetType(input_type)
-                else:
-                    connector = Connector(self, input_name, input_type, wx.Point(0, 0), WEST, onlyone = True)
-                    self.Inputs.append(connector)
+            input_connectors = []
+            for input_name, input_type, input_modifier in inputs:
+                connector = Connector(self, input_name, input_type, wx.Point(0, 0), WEST, onlyone = True)
                 if input_modifier == "negated":
                     connector.SetNegated(True)
                 elif input_modifier != "none":
                     connector.SetEdge(input_modifier)
-            for i in xrange(idx + 1, len(self.Inputs)):
-                self.Inputs[i].UnConnect(delete = True)
-            self.Inputs = self.Inputs[:idx + 1]
+                for input in self.Inputs:
+                    if input.GetName() == input_name:
+                        wires = input.GetWires()[:]
+                        input.UnConnect()
+                        for wire in wires:
+                            connector.Connect(wire)
+                        break
+                input_connectors.append(connector)
+            for input in self.Inputs:
+                input.UnConnect(delete = True)
+            self.Inputs = input_connectors
             
             # Extract the outputs properties and create or modify the corresponding connector
-            idx = 0
-            for idx, (output_name, output_type, output_modifier) in enumerate(outputs):
-                if idx < len(self.Outputs):
-                    connector = self.Outputs[idx]
-                    connector.SetName(output_name)
-                    connector.SetType(output_type)
-                else:
-                    connector = Connector(self, output_name, output_type, wx.Point(0, 0), EAST)
-                    self.Outputs.append(connector)
+            output_connectors = []
+            for output_name, output_type, output_modifier in outputs:
+                connector = Connector(self, output_name, output_type, wx.Point(0, 0), EAST)
                 if output_modifier == "negated":
                     connector.SetNegated(True)
                 elif output_modifier != "none":
                     connector.SetEdge(output_modifier)
-            for i in xrange(idx + 1, len(self.Outputs)):
-                self.Outputs[i].UnConnect(delete = True)
-            self.Outputs = self.Outputs[:idx + 1]
+                for output in self.Outputs:
+                    if output.GetName() == output_name:
+                        wires = output.GetWires()[:]
+                        output.UnConnect()
+                        for wire in wires:
+                            connector.Connect(wire)
+                        break
+                output_connectors.append(connector)
+            for output in self.Outputs:
+                output.UnConnect(delete = True)
+            self.Outputs = output_connectors
                 
             self.RefreshMinSize()
             self.RefreshConnectors()
+            for output in self.Outputs:
+                output.RefreshWires()
             self.RefreshBoundingBox()
     
     # Returns the block type
