@@ -211,13 +211,7 @@ def DecodeFileSystemPath(path, is_base64=True):
 
 
 def AppendMenu(parent, help, id, kind, text):
-    """
-    Compatibility function for wx versions < 2.6
-    """
-    if wx.VERSION >= (2, 6, 0):
-        parent.Append(help=help, id=id, kind=kind, text=text)
-    else:
-        parent.Append(helpString=help, id=id, kind=kind, item=text)
+    parent.Append(help=help, id=id, kind=kind, text=text)
 
 
 [
@@ -323,7 +317,7 @@ def ComputeTabsLayout(tabs, rect):
                 split = (wx.RIGHT, 1.0 - float(tab["size"][0]) / float(rect.width))
                 split_rect = wx.Rect(rect.x, rect.y,
                                      rect.width - tab["size"][0] - TAB_BORDER, rect.height)
-            split_id = id
+            split_id = idx
             break
     if split is not None:
         split_tab = tabs.pop(split_id)
@@ -341,13 +335,6 @@ UNEDITABLE_NAMES_DICT = dict([(_(n), n) for n in UNEDITABLE_NAMES])
 
 class IDEFrame(wx.Frame):
     """IDEFrame Base Class"""
-    # Compatibility function for wx versions < 2.6
-    if wx.VERSION < (2, 6, 0):
-        def Bind(self, event, function, id=None):
-            if id is not None:
-                event(self, id, function)
-            else:
-                event(self, function)
 
     def _init_coll_MenuBar_Menus(self, parent):
         parent.Append(menu=self.FileMenu, title=_(u'&File'))
@@ -953,11 +940,14 @@ class IDEFrame(wx.Frame):
             return data
         else:
             wx.TheClipboard.UsePrimarySelection(primary_selection)
-        if wx.TheClipboard.Open():
+
+        if not wx.TheClipboard.IsOpened():
             dataobj = wx.TextDataObject()
-            if wx.TheClipboard.GetData(dataobj):
-                data = dataobj.GetText()
-            wx.TheClipboard.Close()
+            if wx.TheClipboard.Open():
+                success = wx.TheClipboard.GetData(dataobj)
+                wx.TheClipboard.Close()
+                if success:
+                    data = dataobj.GetText()
         return data
 
     def SetCopyBuffer(self, text, primary_selection=False):
@@ -965,13 +955,14 @@ class IDEFrame(wx.Frame):
             return
         else:
             wx.TheClipboard.UsePrimarySelection(primary_selection)
-        if wx.TheClipboard.Open():
+        if not wx.TheClipboard.IsOpened():
             data = wx.TextDataObject()
             data.SetText(text)
-            wx.TheClipboard.SetData(data)
-            wx.TheClipboard.Flush()
-            wx.TheClipboard.Close()
-        self.RefreshEditMenu()
+            if wx.TheClipboard.Open():
+                wx.TheClipboard.SetData(data)
+                wx.TheClipboard.Flush()
+                wx.TheClipboard.Close()
+        wx.CallAfter(self.RefreshEditMenu)
 
     def GetDrawingMode(self):
         return self.DrawingMode
@@ -2125,10 +2116,7 @@ class IDEFrame(wx.Frame):
         EditorToolBar = self.Panes["EditorToolBar"]
 
         for item in self.CurrentEditorToolBar:
-            if wx.VERSION >= (2, 6, 0):
-                self.Unbind(wx.EVT_MENU, id=item)
-            else:
-                self.Disconnect(id=item, eventType=wx.wxEVT_COMMAND_MENU_SELECTED)
+            self.Unbind(wx.EVT_MENU, id=item)
 
             if EditorToolBar:
                 EditorToolBar.DeleteTool(item)
