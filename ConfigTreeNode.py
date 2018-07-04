@@ -274,15 +274,14 @@ class ConfigTreeNode(object):
             LocationCFilesAndCFLAGS = []
 
         # confnode asks for some LDFLAGS
-        if CTNLDFLAGS:
+        LDFLAGS = []
+        if CTNLDFLAGS is not None:
             # LDFLAGS can be either string
-            if isinstance(CTNLDFLAGS, str):
-                LDFLAGS = [CTNLDFLAGS]
+            if isinstance(CTNLDFLAGS, str) or isinstance(CTNLDFLAGS, unicode):
+                LDFLAGS += [CTNLDFLAGS]
             # or list of strings
             elif isinstance(CTNLDFLAGS, list):
-                LDFLAGS = CTNLDFLAGS[:]
-        else:
-            LDFLAGS = []
+                LDFLAGS += CTNLDFLAGS
 
         # recurse through all children, and stack their results
         for CTNChild in self.IECSortedChildren():
@@ -500,7 +499,10 @@ class ConfigTreeNode(object):
         # Call the OnCloseMethod
         CTNInstance.OnCTNClose()
         # Delete confnode dir
-        shutil.rmtree(CTNInstance.CTNPath())
+        try:
+            shutil.rmtree(CTNInstance.CTNPath())
+        except:
+            pass
         # Remove child of Children
         self.Children[CTNInstance.CTNType].remove(CTNInstance)
         if len(self.Children[CTNInstance.CTNType]) == 0:

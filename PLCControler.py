@@ -35,7 +35,6 @@ from time import localtime
 import util.paths as paths
 from plcopen import *
 from plcopen.types_enums import *
-from plcopen.XSLTModelQuery import _StringValue, _BoolValue, _translate_args
 from plcopen.InstancesPathCollector import InstancesPathCollector
 from plcopen.POUVariablesCollector import POUVariablesCollector
 from plcopen.InstanceTagnameCollector import InstanceTagnameCollector
@@ -45,10 +44,9 @@ from graphics.GraphicCommons import *
 from PLCGenerator import *
 
 duration_model = re.compile("(?:([0-9]{1,2})h)?(?:([0-9]{1,2})m(?!s))?(?:([0-9]{1,2})s)?(?:([0-9]{1,3}(?:\.[0-9]*)?)ms)?")
+VARIABLE_NAME_SUFFIX_MODEL = re.compile('(\d+)$')
 
 ScriptDirectory = paths.AbsDir(__file__)
-
-
 
 # Length of the buffer
 UNDO_BUFFER_LENGTH = 20
@@ -1817,6 +1815,14 @@ class PLCControler(object):
         return text
 
     def GenerateNewName(self, tagname, name, format, start_idx=0, exclude=None, debug=False):
+        if name is not None:
+            result = re.search(VARIABLE_NAME_SUFFIX_MODEL, name)
+            if result is not None:
+                format = name[:result.start(1)] + '%d'
+                start_idx = int(result.group(1))
+            else:
+                format = name + '%d'
+
         names = {} if exclude is None else exclude.copy()
         if tagname is not None:
             names.update(dict([(varname.upper(), True)
@@ -1832,6 +1838,14 @@ class PLCControler(object):
                                  PLCOpenParser.GetElementClass("connector",    "commonObjects"),
                                  PLCOpenParser.GetElementClass("continuation", "commonObjects"))):
                             names[instance.getname().upper()] = True
+            elif words[0] == 'R':
+                element = self.GetEditedElement(tagname, debug)
+                for task in element.gettask():
+                    names[task.getname().upper()] = True
+                    for instance in task.getpouInstance():
+                        names[instance.getname().upper()] = True
+                for instance in element.getpouInstance():
+                    names[instance.getname().upper()] = True
         else:
             project = self.GetProject(debug)
             if project is not None:

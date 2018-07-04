@@ -139,67 +139,24 @@ def PYRO_connector_factory(uri, confnodesroot):
         confnodesroot.logger.write_error(_("Cannot get PLC status - connection failed.\n"))
         return None
 
+    _special_return_funcs = {
+        "StartPLC": False,
+        "GetTraceVariables": ("Broken", None),
+        "GetPLCstatus": ("Broken", None),
+        "RemoteExec": (-1, "RemoteExec script failed!")
+    }
+
     class PyroProxyProxy(object):
         """
         A proxy proxy class to handle Beremiz Pyro interface specific behavior.
         And to put Pyro exception catcher in between caller and Pyro proxy
         """
-        def __init__(self):
-            # for safe use in from debug thread, must create a copy
-            self.RemotePLCObjectProxyCopy = None
-
-        def GetPyroProxy(self):
-            """
-            This func returns the real Pyro Proxy.
-            Use this if you musn't keep reference to it.
-            """
-            return RemotePLCObjectProxy
-
-        def _PyroStartPLC(self, *args, **kwargs):
-            """
-            confnodesroot._connector.GetPyroProxy() is used
-            rather than RemotePLCObjectProxy because
-            object is recreated meanwhile,
-            so we must not keep ref to it here
-            """
-            current_status, _log_count = confnodesroot._connector.GetPyroProxy().GetPLCstatus()
-            if current_status == "Dirty":
-                # Some bad libs with static symbols may polute PLC
-                # ask runtime to suicide and come back again
-
-                confnodesroot.logger.write(_("Force runtime reload\n"))
-                confnodesroot._connector.GetPyroProxy().ForceReload()
-                confnodesroot._Disconnect()
-                # let remote PLC time to resurect.(freeze app)
-                sleep(0.5)
-                confnodesroot._Connect()
-            self.RemotePLCObjectProxyCopy = copy.copy(confnodesroot._connector.GetPyroProxy())
-            return confnodesroot._connector.GetPyroProxy().StartPLC(*args, **kwargs)
-        StartPLC = PyroCatcher(_PyroStartPLC, False)
-
-        def _PyroGetTraceVariables(self):
-            """
-            for safe use in from debug thread, must use the copy
-            """
-            if self.RemotePLCObjectProxyCopy is None:
-                self.RemotePLCObjectProxyCopy = copy.copy(confnodesroot._connector.GetPyroProxy())
-            return self.RemotePLCObjectProxyCopy.GetTraceVariables()
-        GetTraceVariables = PyroCatcher(_PyroGetTraceVariables, ("Broken", None))
-
-        def _PyroGetPLCstatus(self):
-            return RemotePLCObjectProxy.GetPLCstatus()
-        GetPLCstatus = PyroCatcher(_PyroGetPLCstatus, ("Broken", None))
-
-        def _PyroRemoteExec(self, script, **kwargs):
-            return RemotePLCObjectProxy.RemoteExec(script, **kwargs)
-        RemoteExec = PyroCatcher(_PyroRemoteExec, (-1, "RemoteExec script failed!"))
-
         def __getattr__(self, attrName):
             member = self.__dict__.get(attrName, None)
             if member is None:
                 def my_local_func(*args, **kwargs):
                     return RemotePLCObjectProxy.__getattr__(attrName)(*args, **kwargs)
-                member = PyroCatcher(my_local_func, None)
+                member = PyroCatcher(my_local_func, _special_return_funcs.get(attrName, None))
                 self.__dict__[attrName] = member
             return member
 
