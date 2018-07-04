@@ -30,12 +30,14 @@ import os
 import sys
 import getopt
 import threading
-from threading import Thread, currentThread, Semaphore
+from threading import Thread, currentThread, Semaphore, Lock
 import traceback
 import __builtin__
+import Pyro
 import Pyro.core as pyro
 
-from runtime import PLCObject, ServicePublisher
+from runtime import PLCObject, ServicePublisher, MainWorker
+from runtime.xenomai import TryPreloadXenomai
 import util.paths as paths
 
 
@@ -132,6 +134,8 @@ elif len(argv) == 0:
 
 if __name__ == '__main__':
     __builtin__.__dict__['_'] = lambda x: x
+    # TODO: add a cmdline parameter if Trying Preloading Xenomai makes problem
+    TryPreloadXenomai()
 
 
 def Bpath(*args):
@@ -401,7 +405,7 @@ def default_evaluator(tocall, *args, **kwargs):
 
 class Server(object):
     def __init__(self, servicename, ip_addr, port,
-                 workdir, argv, autostart=False,
+                 workdir, argv,
                  statuschange=None, evaluator=default_evaluator,
                  pyruntimevars=None):
         self.continueloop = True
@@ -411,22 +415,48 @@ class Server(object):
         self.port = port
         self.workdir = workdir
         self.argv = argv
-        self.plcobj = None
         self.servicepublisher = None
-        self.autostart = autostart
         self.statuschange = statuschange
         self.evaluator = evaluator
         self.pyruntimevars = pyruntimevars
+        self.plcobj = PLCObject(self)
 
-    def Loop(self):
+    def _to_be_published(self):
+        return self.servicename is not None and \
+               self.ip_addr is not None and \
+               self.ip_addr != "localhost" and \
+               self.ip_addr != "127.0.0.1"
+
+    def PrintServerInfo(self):
+        print(_("Pyro port :"), self.port)
+
+        # Beremiz IDE detects LOCAL:// runtime is ready by looking
+        # for self.workdir in the daemon's stdout.
+        print(_("Current working directory :"), self.workdir)
+
+        if self._to_be_published():
+            print(_("Publishing service on local network"))
+
+        sys.stdout.flush()
+
+    def PyroLoop(self, when_ready):
         while self.continueloop:
+            Pyro.config.PYRO_MULTITHREADED = 0
             pyro.initServer()
             self.daemon = pyro.Daemon(host=self.ip_addr, port=self.port)
+
             # pyro never frees memory after connection close if no timeout set
             # taking too small timeout value may cause
             # unwanted diconnection when IDE is kept busy for long periods
             self.daemon.setTimeout(60)
-            self.Start()
+
+            self.daemon.connect(self.plcobj, "PLCObject")
+
+            if self._to_be_published():
+                self.servicepublisher = ServicePublisher.ServicePublisher()
+                self.servicepublisher.RegisterService(self.servicename, self.ip_addr, self.port)
+
+            when_ready()
             self.daemon.requestLoop()
             self.daemon.sock.close()
 
@@ -440,39 +470,6 @@ class Server(object):
             self.plcobj.UnLoadPLC()
         self._stop()
 
-    def Start(self):
-        self.plcobj = PLCObject(self.workdir, self.daemon, self.argv,
-                                self.statuschange, self.evaluator,
-                                self.pyruntimevars)
-
-        uri = self.daemon.connect(self.plcobj, "PLCObject")
-
-        print(_("Pyro port :"), self.port)
-        print(_("Pyro object's uri :"), uri)
-
-        # Beremiz IDE detects daemon start by looking
-        # for self.workdir in the daemon's stdout.
-        # Therefore don't delete the following line
-        print(_("Current working directory :"), self.workdir)
-
-        # Configure and publish service
-        # Not publish service if localhost in address params
-        if self.servicename is not None and \
-           self.ip_addr is not None and \
-           self.ip_addr != "localhost" and \
-           self.ip_addr != "127.0.0.1":
-            print(_("Publishing service on local network"))
-            self.servicepublisher = ServicePublisher.ServicePublisher()
-            self.servicepublisher.RegisterService(self.servicename, self.ip_addr, self.port)
-
-        self.plcobj.AutoLoad()
-        if self.plcobj.GetPLCstatus()[0] != "Empty":
-            if self.autostart:
-                self.plcobj.StartPLC()
-        self.plcobj.StatusChange()
-
-        sys.stdout.flush()
-
     def _stop(self):
         if self.plcobj is not None:
             self.plcobj.StopPLC()
@@ -480,6 +477,13 @@ class Server(object):
             self.servicepublisher.UnRegisterService()
             self.servicepublisher = None
         self.daemon.shutdown(True)
+
+    def AutoLoad(self):
+        self.plcobj.AutoLoad()
+        if self.plcobj.GetPLCstatus()[0] == "Stopped":
+            if autostart:
+                self.plcobj.StartPLC()
+        self.plcobj.StatusChange()
 
 
 if enabletwisted:
@@ -506,7 +510,7 @@ if havetwisted:
 
 if havewx:
     wx_eval_lock = Semaphore(0)
-    main_thread = currentThread()
+    # main_thread = currentThread()
 
     def statuschangeTskBar(status):
         wx.CallAfter(taskbar_instance.UpdateIcon, status)
@@ -519,23 +523,23 @@ if havewx:
         wx_eval_lock.release()
 
     def evaluator(tocall, *args, **kwargs):
-        if main_thread == currentThread():
-            # avoid dead lock if called from the wx mainloop
-            return default_evaluator(tocall, *args, **kwargs)
-        else:
-            o = type('', (object,), dict(call=(tocall, args, kwargs), res=None))
-            wx.CallAfter(wx_evaluator, o)
-            wx_eval_lock.acquire()
-            return o.res
+        # if main_thread == currentThread():
+        #     # avoid dead lock if called from the wx mainloop
+        #     return default_evaluator(tocall, *args, **kwargs)
+        # else:
+        o = type('', (object,), dict(call=(tocall, args, kwargs), res=None))
+        wx.CallAfter(wx_evaluator, o)
+        wx_eval_lock.acquire()
+        return o.res
 
     pyroserver = Server(servicename, given_ip, port,
-                        WorkingDir, argv, autostart,
+                        WorkingDir, argv,
                         statuschange, evaluator, pyruntimevars)
 
     taskbar_instance = BeremizTaskBarIcon(pyroserver, enablewx)
 else:
     pyroserver = Server(servicename, given_ip, port,
-                        WorkingDir, argv, autostart,
+                        WorkingDir, argv,
                         statuschange, pyruntimevars=pyruntimevars)
 
 
@@ -612,6 +616,7 @@ if havetwisted:
         try:
             website = NS.RegisterWebsite(webport)
             pyruntimevars["website"] = website
+            NS.SetServer(pyroserver)
             statuschange.append(NS.website_statuslistener_factory(website))
         except Exception:
             LogMessageAndException(_("Nevow Web service failed. "))
@@ -630,19 +635,46 @@ if havetwisted:
         except Exception:
             LogMessageAndException(_("WAMP client startup failed. "))
 
+pyro_thread_started = Lock()
+pyro_thread_started.acquire()
+pyro_thread = Thread(target=pyroserver.PyroLoop,
+                     kwargs=dict(when_ready=pyro_thread_started.release))
+pyro_thread.start()
+
+# Wait for pyro thread to be effective
+pyro_thread_started.acquire()
+
+pyroserver.PrintServerInfo()
 
 if havetwisted or havewx:
-    pyro_thread = Thread(target=pyroserver.Loop)
-    pyro_thread.start()
-
+    ui_thread_started = Lock()
+    ui_thread_started.acquire()
     if havetwisted:
-        reactor.run()
-    elif havewx:
-        app.MainLoop()
-else:
-    try:
-        pyroserver.Loop()
-    except KeyboardInterrupt:
-        pass
+        # reactor._installSignalHandlersAgain()
+        def ui_thread_target():
+            # FIXME: had to disable SignaHandlers install because
+            # signal not working in non-main thread
+            reactor.run(installSignalHandlers=False)
+    else:
+        ui_thread_target = app.MainLoop
+
+    ui_thread = Thread(target=ui_thread_target)
+    ui_thread.start()
+
+    # This order ui loop to unblock main thread when ready.
+    if havetwisted:
+        reactor.callLater(0, ui_thread_started.release)
+    else:
+        wx.CallAfter(ui_thread_started.release)
+
+    # Wait for ui thread to be effective
+    ui_thread_started.acquire()
+    print("UI thread started successfully.")
+
+try:
+    MainWorker.runloop(pyroserver.AutoLoad)
+except KeyboardInterrupt:
+    pass
+
 pyroserver.Quit()
 sys.exit(0)
