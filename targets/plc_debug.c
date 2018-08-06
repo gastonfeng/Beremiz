@@ -61,7 +61,7 @@ static dbgvardsc_t dbgvardsc[] = {
 typedef void(*__for_each_variable_do_fp)(dbgvardsc_t*);
 void __for_each_variable_do(__for_each_variable_do_fp fp)
 {
-    int i;
+    unsigned int i;
     for(i = 0; i < sizeof(dbgvardsc)/sizeof(dbgvardsc_t); i++){
         dbgvardsc_t *dsc = &dbgvardsc[i];
         if(dsc->type != UNKNOWN_ENUM) 
@@ -211,6 +211,31 @@ void RetainIterator(dbgvardsc_t *dsc){
     BufferIterator(dsc, 0);
 }
 
+
+unsigned int retain_size = 0;
+
+/* GetRetainSizeIterator */
+void GetRetainSizeIterator(dbgvardsc_t *dsc)
+{
+    void *real_value_p = NULL;
+    char flags = 0;
+    UnpackVar(dsc, &real_value_p, &flags);
+
+    if(flags & __IEC_RETAIN_FLAG){
+        USINT size = __get_type_enum_size(dsc->type);
+        /* Calc retain buffer size */
+        retain_size += size;
+    }
+}
+
+/* Return size of all retain variables */
+unsigned int GetRetainSize(void)
+{
+    __for_each_variable_do(GetRetainSizeIterator);
+    return retain_size;
+}
+
+
 extern void PLC_GetTime(IEC_TIME*);
 extern int TryEnterDebugSection(void);
 extern long AtomicCompareExchange(long*, long, long);
@@ -274,7 +299,7 @@ void __publish_debug(void)
              *(((__IEC_##TYPENAME##_p *)varp)->value) = *((TYPENAME *)force);\
             }\
             break;
-void RegisterDebugVariable(int idx, void* force)
+void RegisterDebugVariable(unsigned int idx, void* force)
 {
     if(idx  < sizeof(dbgvardsc)/sizeof(dbgvardsc_t)){
         unsigned char flags = force ?
