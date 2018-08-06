@@ -34,8 +34,8 @@ set_exit_error()
 
 compile_checks()
 {
-    echo "Syntax checking..."
-    py_files=$(find . -name '*.py')
+    echo "Syntax checking using python ..."
+    python --version
 
     # remove compiled Python files
     find . -name '*.pyc' -exec rm -f {} \;
@@ -48,6 +48,8 @@ compile_checks()
             set_exit_error
         fi
     done
+    echo "DONE"
+    echo ""
 }
 
 # pep8 was renamed to pycodestyle
@@ -60,6 +62,8 @@ pep8_detect()
         echo "pep8/pycodestyle is not found"
         set_exit_error
     fi
+    echo -n "pep8 version: "
+    $pep8 --version
 }
 
 pep8_checks_default()
@@ -87,10 +91,13 @@ pep8_checks_default()
     ignore=$user_ignore,$default_ignore
 
     # $pep8 --ignore $ignore --exclude build ./
-    $pep8 --max-line-length 300 --exclude build ./
+    $pep8 --max-line-length 300 --exclude build $py_files
     if [ $? -ne 0 ]; then
         set_exit_error
     fi
+
+    echo "DONE"
+    echo ""
 }
 
 
@@ -155,10 +162,13 @@ pep8_checks_selected()
     user_select=$user_select,E402   # E402 module level import not at top of file
     user_select=$user_select,W503   # W503 line break before binary operator
 
-    $pep8 --select $user_select --exclude=build .
+    $pep8 --select $user_select --exclude=build $py_files
     if [ $? -ne 0 ]; then
         set_exit_error
     fi
+
+    echo "DONE"
+    echo ""
 }
 
 flake8_checks()
@@ -172,10 +182,16 @@ flake8_checks()
         return
     fi
 
-    flake8 --max-line-length=300  --exclude=build --builtins="_" ./
+    echo -n "flake8 version: "
+    flake8 --version
+
+    flake8 --max-line-length=300  --exclude=build --builtins="_" $py_files
     if [ $? -ne 0 ]; then
         set_exit_error
     fi
+
+    echo "DONE"
+    echo ""
 }
 
 pylint_checks()
@@ -188,6 +204,7 @@ pylint_checks()
         set_exit_error
         return
     fi
+    pylint --version
 
     export PYTHONPATH="$PWD/../CanFestival-3/objdictgen":$PYTHONPATH
 
@@ -200,7 +217,7 @@ pylint_checks()
     disable=$disable,W1401        # (anomalous-backslash-in-string) Anomalous backslash in string: '\.'. String constant might be missing an r prefix.
     disable=$disable,W0613        # (unused-argument) Unused argument 'X'
     disable=$disable,W0622        # (redefined-builtin) Redefining built-in
-    disable=$disable,W0621        # (redefined-outer-name) Redefining name 'Y' from outer scope (line X)    
+    disable=$disable,W0621        # (redefined-outer-name) Redefining name 'Y' from outer scope (line X)
     disable=$disable,W0122        # (exec-used) Use of exec
     disable=$disable,W0123        # (eval-used) Use of eval
     disable=$disable,I0011        # (locally-disabled) Locally disabling ungrouped-imports (C0412)
@@ -214,7 +231,7 @@ pylint_checks()
     disable=$disable,W0703        # broad-except
     disable=$disable,C0301        # Line too long
     disable=$disable,C0302        # Too many lines in module
-    disable=$disable,W0511        # fixme    
+    disable=$disable,W0511        # fixme
     disable=$disable,R0901        # (too-many-ancestors) Too many ancestors (9/7)
     disable=$disable,R0902        # (too-many-instance-attributes) Too many instance attributes (10/7)
     disable=$disable,R0903        # (too-few-public-methods) Too few public methods (0/2)
@@ -231,14 +248,14 @@ pylint_checks()
 
     enable=
     enable=$enable,E1601          # print statement used
-    enable=$enable,C0325          # (superfluous-parens) Unnecessary parens after keyword    
-    enable=$enable,W0404          # reimported module    
+    enable=$enable,C0325          # (superfluous-parens) Unnecessary parens after keyword
+    enable=$enable,W0404          # reimported module
     enable=$enable,C0411          # (wrong-import-order) standard import "import x" comes before "import y"
     enable=$enable,W0108          # (unnecessary-lambda) Lambda may not be necessary
     enable=$enable,C0412          # (ungrouped-imports) Imports from package X are not grouped
     enable=$enable,C0321          # (multiple-statements) More than one statement on a single line
     enable=$enable,W0231          # (super-init-not-called) __init__ method from base class is not called
-    enable=$enable,W0105          # (pointless-string-statement) String statement has no effect    
+    enable=$enable,W0105          # (pointless-string-statement) String statement has no effect
     enable=$enable,W0311          # (bad-indentation) Bad indentation. Found 16 spaces, expected 12
     enable=$enable,W0101          # (unreachable) Unreachable code
     enable=$enable,E0102          # (function-redefined) method already defined
@@ -287,20 +304,85 @@ pylint_checks()
     fi
     # echo $options
 
-    find ./ -name '*.py' | grep -v '/build/' | xargs pylint $options 
+    echo $py_files | xargs pylint $options
     if [ $? -ne 0 ]; then
         set_exit_error
     fi
+
+    echo "DONE"
+    echo ""
+}
+
+
+get_files_to_check()
+{
+    py_files=$(find . -name '*.py' -not -path '*/build/*')
+    if [ -e .hg/skiphook ]; then
+	echo "Skipping checks in the hook ..."
+	exit 0
+    fi
+    if [ "$1" = "--only-changes" ]; then
+        if which hg > /dev/null; then
+            if [ ! -z "$HG_NODE" ]; then
+                hg_change="--change $HG_NODE"
+                msg="for commit $HG_NODE"
+            else
+                hg_change=""
+                msg="in local repository"
+            fi
+            echo "Only changes ${msg} will be checked"
+            echo ""
+            py_files=$(hg status -m -a -n -I '**.py' $hg_change)
+            if [ $? -ne 0 ]; then
+                exit 1;
+            fi
+       fi
+    fi
+    if [ "$1" = "--files-to-check" ]; then
+        list="$2"
+        if [ -z "$list" ]; then
+            echo "--files-to-check requires filename as argument"
+            print_help
+        fi
+        if [ -e "$list" ]; then
+            py_files=$(cat $2 | grep '\.py$')
+        fi
+    fi
+    if [ -z "$py_files" ]; then
+        echo "No files to check"
+        exit 0;
+    fi
+}
+
+
+print_help()
+{
+    echo "Usage: check_source.sh [--only-changes | --files-to-check <filename> ]"
+    echo ""
+    echo "By default without arguments script checks all python source files"
+    echo ""
+    echo "--only-changes"
+    echo "                only files with local changes are checked. "
+    echo "                If script is called from mercurial pretxncommit hook,"
+    echo "                then only commited files are checked"
+    echo ""
+    echo "--files-to-check <file.lst>"
+    echo "                script read list of files to check from file.lst"
+
+    exit 1
 }
 
 main()
 {
+    get_files_to_check $@
     compile_checks
     pep8_checks_default
     # pep8_checks_selected
+
     # flake8_checks
     pylint_checks
     exit $exit_code
 }
 
-main
+[ "$1" = "--help" -o "$1" = "-h" ] && print_help
+main $@
