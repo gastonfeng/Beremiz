@@ -147,7 +147,7 @@ class DurationEditorDialog(wx.Dialog):
                 duration += format % value
                 not_null = True
 
-        duration += "%gms" % (milliseconds % SECOND)
+        duration += ("%f" % (milliseconds % SECOND)).rstrip("0").rstrip(".") + "ms"
         return duration
 
     def OnOK(self, event):
@@ -157,7 +157,8 @@ class DurationEditorDialog(wx.Dialog):
         errors = []
         for control, name in [(self.Days, _("days")), (self.Hours, _("hours")),
                               (self.Minutes, _("minutes")), (self.Seconds, _("seconds")),
-                              (self.Milliseconds, _("milliseconds"))]:
+                              (self.Milliseconds, _("milliseconds")),
+                              (self.Microseconds, _("microseconds"))]:
             try:
                 float(control.GetValue())
             except ValueError:
