@@ -72,7 +72,8 @@ from plcopen.types_enums import *
 [
     ID_PLCOPENEDITORDISPLAYMENURESETPERSPECTIVE,
     ID_PLCOPENEDITORDISPLAYMENUSWITCHPERSPECTIVE,
-] = [wx.NewId() for _init_coll_DisplayMenu_Items in range(2)]
+    ID_PLCOPENEDITORDISPLAYMENUFULLSCREEN,
+] = [wx.NewId() for _init_coll_DisplayMenu_Items in range(3)]
 
 # -------------------------------------------------------------------------------
 #                            EditorToolBar definitions
@@ -211,13 +212,7 @@ def DecodeFileSystemPath(path, is_base64=True):
 
 
 def AppendMenu(parent, help, id, kind, text):
-    """
-    Compatibility function for wx versions < 2.6
-    """
-    if wx.VERSION >= (2, 6, 0):
-        parent.Append(help=help, id=id, kind=kind, text=text)
-    else:
-        parent.Append(helpString=help, id=id, kind=kind, item=text)
+    parent.Append(help=help, id=id, kind=kind, text=text)
 
 
 [
@@ -323,7 +318,7 @@ def ComputeTabsLayout(tabs, rect):
                 split = (wx.RIGHT, 1.0 - float(tab["size"][0]) / float(rect.width))
                 split_rect = wx.Rect(rect.x, rect.y,
                                      rect.width - tab["size"][0] - TAB_BORDER, rect.height)
-            split_id = id
+            split_id = idx
             break
     if split is not None:
         split_tab = tabs.pop(split_id)
@@ -341,13 +336,6 @@ UNEDITABLE_NAMES_DICT = dict([(_(n), n) for n in UNEDITABLE_NAMES])
 
 class IDEFrame(wx.Frame):
     """IDEFrame Base Class"""
-    # Compatibility function for wx versions < 2.6
-    if wx.VERSION < (2, 6, 0):
-        def Bind(self, event, function, id=None):
-            if id is not None:
-                event(self, id, function)
-            else:
-                event(self, function)
 
     def _init_coll_MenuBar_Menus(self, parent):
         parent.Append(menu=self.FileMenu, title=_(u'&File'))
@@ -416,8 +404,6 @@ class IDEFrame(wx.Frame):
                   id=ID_PLCOPENEDITOREDITMENUFINDPREVIOUS)
         self.Bind(wx.EVT_MENU, self.OnSearchInProjectMenu,
                   id=ID_PLCOPENEDITOREDITMENUSEARCHINPROJECT)
-        self.Bind(wx.EVT_MENU, self.OnSearchInProjectMenu,
-                  id=ID_PLCOPENEDITOREDITMENUSEARCHINPROJECT)
         self.Bind(wx.EVT_MENU, self.OnAddDataTypeMenu,
                   id=ID_PLCOPENEDITOREDITMENUADDDATATYPE)
         self.Bind(wx.EVT_MENU, self.GenerateAddPouFunction("function"),
@@ -440,7 +426,8 @@ class IDEFrame(wx.Frame):
                                (wx.ID_COPY, "copy", _(u'Copy'), None),
                                (wx.ID_PASTE, "paste", _(u'Paste'), None),
                                None,
-                               (ID_PLCOPENEDITOREDITMENUSEARCHINPROJECT, "find", _(u'Search in Project'), None)])
+                               (ID_PLCOPENEDITOREDITMENUSEARCHINPROJECT, "find", _(u'Search in Project'), None),
+                               (ID_PLCOPENEDITORDISPLAYMENUFULLSCREEN, "fullscreen", _(u'Toggle fullscreen mode'), None)])
 
     def _init_coll_DisplayMenu_Items(self, parent):
         AppendMenu(parent, help='', id=wx.ID_REFRESH,
@@ -460,7 +447,11 @@ class IDEFrame(wx.Frame):
         parent.AppendSeparator()
         AppendMenu(parent, help='', id=ID_PLCOPENEDITORDISPLAYMENUSWITCHPERSPECTIVE,
                    kind=wx.ITEM_NORMAL, text=_(u'Switch perspective') + '\tF12')
-        self.Bind(wx.EVT_MENU, self.SwitchFullScrMode, id=ID_PLCOPENEDITORDISPLAYMENUSWITCHPERSPECTIVE)
+        self.Bind(wx.EVT_MENU, self.SwitchPerspective, id=ID_PLCOPENEDITORDISPLAYMENUSWITCHPERSPECTIVE)
+
+        AppendMenu(parent, help='', id=ID_PLCOPENEDITORDISPLAYMENUFULLSCREEN,
+                   kind=wx.ITEM_NORMAL, text=_(u'Full screen') + '\tShift-F12')
+        self.Bind(wx.EVT_MENU, self.SwitchFullScrMode, id=ID_PLCOPENEDITORDISPLAYMENUFULLSCREEN)
 
         AppendMenu(parent, help='', id=ID_PLCOPENEDITORDISPLAYMENURESETPERSPECTIVE,
                    kind=wx.ITEM_NORMAL, text=_(u'Reset Perspective'))
@@ -953,11 +944,18 @@ class IDEFrame(wx.Frame):
             return data
         else:
             wx.TheClipboard.UsePrimarySelection(primary_selection)
-        if wx.TheClipboard.Open():
+
+        if not wx.TheClipboard.IsOpened():
             dataobj = wx.TextDataObject()
-            if wx.TheClipboard.GetData(dataobj):
-                data = dataobj.GetText()
-            wx.TheClipboard.Close()
+            if wx.TheClipboard.Open():
+                success = False
+                try:
+                    success = wx.TheClipboard.GetData(dataobj)
+                except wx._core.PyAssertionError:
+                    pass
+                wx.TheClipboard.Close()
+                if success:
+                    data = dataobj.GetText()
         return data
 
     def SetCopyBuffer(self, text, primary_selection=False):
@@ -965,13 +963,14 @@ class IDEFrame(wx.Frame):
             return
         else:
             wx.TheClipboard.UsePrimarySelection(primary_selection)
-        if wx.TheClipboard.Open():
+        if not wx.TheClipboard.IsOpened():
             data = wx.TextDataObject()
             data.SetText(text)
-            wx.TheClipboard.SetData(data)
-            wx.TheClipboard.Flush()
-            wx.TheClipboard.Close()
-        self.RefreshEditMenu()
+            if wx.TheClipboard.Open():
+                wx.TheClipboard.SetData(data)
+                wx.TheClipboard.Flush()
+                wx.TheClipboard.Close()
+        wx.CallAfter(self.RefreshEditMenu)
 
     def GetDrawingMode(self):
         return self.DrawingMode
@@ -1489,17 +1488,21 @@ class IDEFrame(wx.Frame):
         def OnTabsOpenedDClick(event):
             pos = event.GetPosition()
             if tabctrl.TabHitTest(pos.x, pos.y, None):
-                self.SwitchFullScrMode(event)
+                self.SwitchPerspective(event)
             event.Skip()
         return OnTabsOpenedDClick
 
-    def SwitchFullScrMode(self, evt):
+    def SwitchPerspective(self, evt):
         pane = self.AUIManager.GetPane(self.TabsOpened)
         if pane.IsMaximized():
             self.AUIManager.RestorePane(pane)
         else:
             self.AUIManager.MaximizePane(pane)
         self.AUIManager.Update()
+
+    def SwitchFullScrMode(self, evt):
+        show = not self.IsFullScreen()
+        self.ShowFullScreen(show)
 
     # -------------------------------------------------------------------------------
     #                         Types Tree Management Functions
@@ -2125,10 +2128,7 @@ class IDEFrame(wx.Frame):
         EditorToolBar = self.Panes["EditorToolBar"]
 
         for item in self.CurrentEditorToolBar:
-            if wx.VERSION >= (2, 6, 0):
-                self.Unbind(wx.EVT_MENU, id=item)
-            else:
-                self.Disconnect(id=item, eventType=wx.wxEVT_COMMAND_MENU_SELECTED)
+            self.Unbind(wx.EVT_MENU, id=item)
 
             if EditorToolBar:
                 EditorToolBar.DeleteTool(item)
@@ -2164,9 +2164,9 @@ class IDEFrame(wx.Frame):
                         self.Bind(wx.EVT_MENU, getattr(self, method), id=id)
                         self.CurrentEditorToolBar.append(id)
                 EditorToolBar.Realize()
-                self.AUIManager.GetPane("EditorToolBar").BestSize(EditorToolBar.GetBestSize())
                 self.AUIManager.GetPane("EditorToolBar").Show()
                 self.AUIManager.Update()
+                self.AUIManager.GetPane("EditorToolBar").BestSize(EditorToolBar.GetBestSize())
         elif menu is None:
             self.ResetEditorToolBar()
             self.CurrentMenu = menu

@@ -26,7 +26,7 @@
 from __future__ import absolute_import
 from __future__ import print_function
 import os
-import platform
+import platform as platform_module
 from zope.interface import implements
 from nevow import appserver, inevow, tags, loaders, athena, url, rend
 from nevow.page import renderer
@@ -59,6 +59,7 @@ class PLCHMI(athena.LiveElement):
 
     def HMIinitialisation(self):
         self.HMIinitialised(None)
+
 
 class DefaultPLCStartedHMI(PLCHMI):
     docFactory = loaders.stan(
@@ -131,94 +132,128 @@ class MainPage(athena.LiveElement):
         for child in self.liveFragmentChildren[:]:
             child.detach()
 
+
 class ConfigurableBindings(configurable.Configurable):
 
     def __init__(self):
         configurable.Configurable.__init__(self, None)
         self.bindingsNames = []
+        self.infostringcount = 0
 
     def getBindingNames(self, ctx):
         return self.bindingsNames
 
-    def addExtension(self, name, desc, fields, btnlabel, callback):
+    def addInfoString(self, label, value, name=None):
+        if isinstance(value, str):
+            def default(*k):
+                return value
+        else:
+            def default(*k):
+                return value()
+
+        if name is None:
+            name = "_infostring_" + str(self.infostringcount)
+            self.infostringcount = self.infostringcount + 1
+
+        def _bind(ctx):
+            return annotate.Property(
+                name,
+                annotate.String(
+                    label=label,
+                    default=default,
+                    immutable=True))
+        setattr(self, 'bind_' + name, _bind)
+        self.bindingsNames.append(name)
+
+    def addSettings(self, name, desc, fields, btnlabel, callback):
         def _bind(ctx):
             return annotate.MethodBinding(
-                'action_'+name,
-                annotate.Method(arguments=[
-                    annotate.Argument(*field)
-                    for field in fields],
-                    label = desc),
-                action = btnlabel)
-        setattr(self, 'bind_'+name, _bind)
-            
-        setattr(self, 'action_'+name, callback)
+                'action_' + name,
+                annotate.Method(
+                    arguments=[
+                        annotate.Argument(*field)
+                        for field in fields],
+                    label=desc),
+                action=btnlabel)
+        setattr(self, 'bind_' + name, _bind)
+
+        setattr(self, 'action_' + name, callback)
 
         self.bindingsNames.append(name)
 
+
 ConfigurableSettings = ConfigurableBindings()
 
+
 class ISettings(annotate.TypedInterface):
-    platform = annotate.String(label = _("Platform"),
-                           default = platform.system() + " " + platform.release(),
-                           immutable = True)
+    platform = annotate.String(label=_("Platform"),
+                               default=platform_module.system() +
+                               " " + platform_module.release(),
+                               immutable=True)
+
     # TODO version ?
 
+    # pylint: disable=no-self-argument
     def sendLogMessage(
-        ctx = annotate.Context(),
-        level = annotate.Choice(LogLevels,
-                                required=True, 
-                                label=_("Log message level")),
-        message = annotate.String(label=_("Message text"))):
-            pass
-    sendLogMessage = annotate.autocallable(sendLogMessage, 
-                                           label=_("Send a message to the log"),
+            ctx=annotate.Context(),
+            level=annotate.Choice(LogLevels,
+                                  required=True,
+                                  label=_("Log message level")),
+            message=annotate.String(label=_("Message text"))):
+        pass
+
+    sendLogMessage = annotate.autocallable(sendLogMessage,
+                                           label=_(
+                                               "Send a message to the log"),
                                            action=_("Send"))
+
 
 customSettingsURLs = {
 }
 
+
 class SettingsPage(rend.Page):
     # We deserve a slash
     addSlash = True
-    
+
     # This makes webform_css url answer some default CSS
     child_webform_css = webform.defaultCSS
     child_webinterface_css = File(paths.AbsNeighbourFile(__file__, 'webinterface.css'), 'text/css')
 
     implements(ISettings)
 
-
     docFactory = loaders.stan([tags.html[
-                                   tags.head[
-                                       tags.title[_("Beremiz Runtime Settings")],
-                                       tags.link(rel='stylesheet',
-                                                 type='text/css', 
-                                                 href=url.here.child("webform_css")),
-                                       tags.link(rel='stylesheet',
-                                                 type='text/css',
-                                                 href=url.here.child("webinterface_css"))
-                                   ],
-                                   tags.body[ 
-                                       tags.a(href='/')['back'],
-                                       tags.h1["Runtime settings:"],
-                                       webform.renderForms('staticSettings'),
-                                       tags.h1["Extensions settings:"],
-                                       webform.renderForms('dynamicSettings'),
-                                   ]]])
+        tags.head[
+            tags.title[_("Beremiz Runtime Settings")],
+            tags.link(rel='stylesheet',
+                      type='text/css',
+                      href=url.here.child("webform_css")),
+            tags.link(rel='stylesheet',
+                      type='text/css',
+                      href=url.here.child("webinterface_css"))
+        ],
+        tags.body[
+            tags.a(href='/')['Back'],
+            tags.h1["Runtime settings:"],
+            webform.renderForms('staticSettings'),
+            tags.h1["Extensions settings:"],
+            webform.renderForms('dynamicSettings'),
+        ]]])
 
     def configurable_staticSettings(self, ctx):
         return configurable.TypedInterfaceConfigurable(self)
 
     def configurable_dynamicSettings(self, ctx):
         return ConfigurableSettings
-    
+
     def sendLogMessage(self, level, message, **kwargs):
         level = LogLevelsDict[level]
         if _PySrv.plcobj is not None:
-            _PySrv.plcobj.LogMessage(level, "Web form log message: " + message )
+            _PySrv.plcobj.LogMessage(
+                level, "Web form log message: " + message)
 
     def locateChild(self, ctx, segments):
-        if segments[0] in customSettingsURLs :
+        if segments[0] in customSettingsURLs:
             return customSettingsURLs[segments[0]](ctx, segments)
         return super(SettingsPage, self).locateChild(ctx, segments)
 
@@ -230,12 +265,14 @@ class WebInterface(athena.LivePage):
                                    tags.head(render=tags.directive('liveglue'))[
                                        tags.title[PAGE_TITLE],
                                        tags.link(rel='stylesheet',
-                                                 type='text/css', 
+                                                 type='text/css',
                                                  href=url.here.child("webform_css"))
                                    ],
                                    tags.body[
                                        tags.div[
-                                           tags.div(render=tags.directive("MainPage")),
+                                           tags.div(
+                                               render=tags.directive(
+                                                   "MainPage")),
                                        ]]]])
     MainPage = MainPage()
     PLCHMI = PLCHMI
@@ -245,7 +282,8 @@ class WebInterface(athena.LivePage):
 
     def __init__(self, plcState=False, *a, **kw):
         super(WebInterface, self).__init__(*a, **kw)
-        self.jsModules.mapping[u'WebInterface'] = paths.AbsNeighbourFile(__file__, 'webinterface.js')
+        self.jsModules.mapping[u'WebInterface'] = paths.AbsNeighbourFile(
+            __file__, 'webinterface.js')
         self.plcState = plcState
         self.MainPage.setPLCState(plcState)
 
@@ -295,7 +333,6 @@ class WebInterface(athena.LivePage):
         # print "We will be called back when the client disconnects"
 
 
-
 def RegisterWebsite(port):
     website = WebInterface()
     site = appserver.NevowSite(website)
@@ -306,6 +343,7 @@ def RegisterWebsite(port):
 
 
 class statuslistener(object):
+
     def __init__(self, site):
         self.oldstate = None
         self.site = site
@@ -326,4 +364,3 @@ def website_statuslistener_factory(site):
 def SetServer(pysrv):
     global _PySrv
     _PySrv = pysrv
-
