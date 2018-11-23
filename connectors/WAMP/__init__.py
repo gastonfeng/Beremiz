@@ -71,10 +71,10 @@ def WAMP_connector_factory(uri, confnodesroot):
     WAMP://127.0.0.1:12345/path#realm#ID
     WAMPS://127.0.0.1:12345/path#realm#ID
     """
-    servicetype, location = uri.split("://")
+    scheme, location = uri.split("://")
     urlpath, realm, ID = location.split('#')
     urlprefix = {"WAMP":  "ws",
-                 "WAMPS": "wss"}[servicetype]
+                 "WAMPS": "wss"}[scheme]
     url = urlprefix+"://"+urlpath
 
     def RegisterWampClient():
@@ -152,6 +152,9 @@ def WAMP_connector_factory(uri, confnodesroot):
                 member = WampSessionProcMapper(attrName)
                 self.__dict__[attrName] = member
             return member
+
+    # TODO : GetPLCID()
+    # TODO : PSK.UpdateID()
 
     # Try to get the proxy object
     try:

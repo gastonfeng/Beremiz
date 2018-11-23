@@ -55,7 +55,7 @@ from editors.FileManagementPanel import FileManagementPanel
 from editors.ProjectNodeEditor import ProjectNodeEditor
 from editors.IECCodeViewer import IECCodeViewer
 from editors.DebugViewer import DebugViewer, REFRESH_PERIOD
-from dialogs import DiscoveryDialog
+from dialogs import UriEditor, IDManager
 from PLCControler import PLCControler
 from plcopen.structures import IEC_KEYWORDS
 from plcopen.types_enums import ComputeConfigurationResourceName, ITEM_CONFNODE
@@ -268,7 +268,7 @@ class ProjectController(ConfigTreeNode, PLCControler):
         self._setBuildPath(None)
         self.debug_break = False
         self.previous_plcstate = None
-        # copy ConfNodeMethods so that it can be later customized
+        # copy StatusMethods so that it can be later customized
         self.StatusMethods = [dic.copy() for dic in self.StatusMethods]
 
     def __del__(self):
@@ -1260,6 +1260,11 @@ class ProjectController(ConfigTreeNode, PLCControler):
 
     _IECCodeView = None
 
+    def _showIDManager(self):
+        dlg = IDManager(self.AppFrame, self)
+        dlg.ShowModal()
+        dlg.Destroy()
+
     def _showIECcode(self):
         self._OpenView("IEC code")
 
@@ -1759,7 +1764,7 @@ class ProjectController(ConfigTreeNode, PLCControler):
         if uri == "":
             try:
                 # Launch Service Discovery dialog
-                dialog = DiscoveryDialog(self.AppFrame)
+                dialog = UriEditor(self.AppFrame, self)
                 answer = dialog.ShowModal()
                 uri = dialog.GetURI()
                 dialog.Destroy()
@@ -1939,6 +1944,12 @@ class ProjectController(ConfigTreeNode, PLCControler):
             "tooltip": _("Disconnect from PLC"),
             "method":   "_Disconnect",
             "shown":      False,
+        },
+        {
+            "bitmap":    "IDManager",
+            "name":    _("ID Manager"),
+            "tooltip": _("Manage secure connection identities"),
+            "method":   "_showIDManager",
         },
         {
             "bitmap":    "ShowIECcode",
