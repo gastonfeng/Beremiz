@@ -36,9 +36,10 @@ import Pyro.core
 import Pyro.util
 from Pyro.errors import PyroError
 
+import PSKManagement as PSK
 from runtime import PlcStatus
 
-service_type = '_PYRO._tcp.local.'
+zeroconf_service_type = '_PYRO._tcp.local.'
 # this module attribute contains a list of DNS-SD (Zeroconf) service types
 # supported by this connector confnode.
 #
@@ -52,45 +53,29 @@ def PYRO_connector_factory(uri, confnodesroot):
     """
     confnodesroot.logger.write(_("PYRO connecting to URI : %s\n") % uri)
 
-    servicetype, location = uri.split("://")
-    if servicetype == "PYROS":
-        schemename = "PYROLOCSSL"
-        # Protect against name->IP substitution in Pyro3
-        Pyro.config.PYRO_DNS_URI = True
-        # Beware Pyro lib need str path, not unicode
-        # don't rely on PYRO_STORAGE ! see documentation
-        Pyro.config.PYROSSL_CERTDIR = os.path.abspath(str(confnodesroot.ProjectPath) + '/certs')
-        if not os.path.exists(Pyro.config.PYROSSL_CERTDIR):
+    scheme, location = uri.split("://")
+    if scheme == "PYROS":
+        import connectors.PYRO.PSK_Adapter
+        schemename = "PYROLOCPSK"
+        url, ID = location.split('#') #TODO fix exception when # not found
+        # load PSK from project
+        secpath = os.path.join(str(confnodesroot.ProjectPath), 'psk', ID+'.secret')
+        if not os.path.exists(secpath):
             confnodesroot.logger.write_error(
-                'Error : the directory %s is missing for SSL certificates (certs_dir).'
-                'Please fix it in your project.\n' % Pyro.config.PYROSSL_CERTDIR)
+                'Error: Pre-Shared-Key Secret in %s is missing!\n' % secpath)
             return None
-        else:
-            confnodesroot.logger.write(_("PYRO using certificates in '%s' \n")
-                                       % (Pyro.config.PYROSSL_CERTDIR))
-        Pyro.config.PYROSSL_CERT = "client.crt"
-        Pyro.config.PYROSSL_KEY = "client.key"
-
-        # Ugly Monkey Patching
-        def _gettimeout(self):
-            return self.timeout
-
-        def _settimeout(self, timeout):
-            self.timeout = timeout
-        from M2Crypto.SSL import Connection  # pylint: disable=import-error
-        Connection.timeout = None
-        Connection.gettimeout = _gettimeout
-        Connection.settimeout = _settimeout
-        # M2Crypto.SSL.Checker.WrongHost: Peer certificate commonName does not
-        # match host, expected 127.0.0.1, got server
-        Connection.clientPostConnectionCheck = None
+        secret = open(secpath).read().partition(':')[2].rstrip('\n\r')
+        Pyro.config.PYROPSK = (secret, ID)
+        # strip ID from URL, so that pyro can understand it.
+        location = url
     else:
         schemename = "PYROLOC"
-    if location.find(service_type) != -1:
+
+    if location.find(zeroconf_service_type) != -1:
         try:
             from zeroconf import Zeroconf
             r = Zeroconf()
-            i = r.get_service_info(service_type, location)
+            i = r.get_service_info(zeroconf_service_type, location)
             if i is None:
                 raise Exception("'%s' not found" % location)
             ip = str(socket.inet_ntoa(i.address))
@@ -108,8 +93,8 @@ def PYRO_connector_factory(uri, confnodesroot):
     try:
         RemotePLCObjectProxy = Pyro.core.getAttrProxyForURI(schemename + "://" + location + "/PLCObject")
     except Exception:
-        confnodesroot.logger.write_error(_("Connection to '%s' failed.\n") % location)
-        confnodesroot.logger.write_error(traceback.format_exc())
+        confnodesroot.logger.write_error(_("Connection to '%s' failed with exception '%s'\n") % (location, str(e)))
+        #confnodesroot.logger.write_error(traceback.format_exc())
         return None
 
     def PyroCatcher(func, default=None):
@@ -136,13 +121,17 @@ def PYRO_connector_factory(uri, confnodesroot):
 
     # Check connection is effective.
     # lambda is for getattr of GetPLCstatus to happen inside catcher
-    if PyroCatcher(RemotePLCObjectProxy.GetPLCstatus)() is None:
-        confnodesroot.logger.write_error(_("Cannot get PLC status - connection failed.\n"))
-        return None
+    IDPSK = PyroCatcher(RemotePLCObjectProxy.GetPLCID)()
+    if IDPSK is None:
+        confnodesroot.logger.write_warning(_("PLC did not provide identity and security infomation.\n"))
+    else:
+        ID,secret = IDPSK
+        PSK.UpdateID(confnodesroot.ProjectPath, ID, secret, uri)
+
 
     _special_return_funcs = {
         "StartPLC": False,
-        "GetTraceVariables": ("Broken", None),
+        "GetTraceVariables": (PlcStatus.Broken, None),
         "GetPLCstatus": (PlcStatus.Broken, None),
         "RemoteExec": (-1, "RemoteExec script failed!")
     }

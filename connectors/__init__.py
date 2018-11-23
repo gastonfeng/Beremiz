@@ -30,32 +30,33 @@ from __future__ import absolute_import
 from os import listdir, path
 import util.paths as paths
 
-_base_path = paths.AbsDir(__file__)
+connectors_packages = ["PYRO","WAMP"]
 
 
 def _GetLocalConnectorClassFactory(name):
     return lambda: getattr(__import__(name, globals(), locals()), name + "_connector_factory")
 
 
-def _GetLocalConnectorClassDialog(name):
-    return lambda: getattr(__import__(name + '.dialog', globals(), locals(), fromlist=['dialog']), name + "_connector_dialog")
+connectors = {name: _GetLocalConnectorClassFactory(name)
+              for name in connectors_packages}
 
+_dialogs_imported = False
+per_URI_connectors = None
+schemes = None 
 
-def _GetLocalConnectorURITypes(name):
-    return lambda: getattr(__import__(name + '.dialog', globals(), locals(), fromlist=['dialog']), "URITypes", None)
+# lazy import of connectors dialogs, only if used
+def _Import_Dialogs():
+    global per_URI_connectors, schemes, _dialogs_imported
+    if not _dialogs_imported: 
+        _dialogs_imported = True
+        per_URI_connectors = {}
+        schemes = []
+        for con_name in connectors_packages:
+            module =  __import__(con_name + '_dialog', globals(), locals())
 
-
-connectors = {name:
-              _GetLocalConnectorClassFactory(name)
-              for name in listdir(_base_path)
-              if (path.isdir(path.join(_base_path, name)) and
-                  not name.startswith("__"))}
-
-connectors_dialog = {name:
-                     {"function": _GetLocalConnectorClassDialog(name), "URITypes": _GetLocalConnectorURITypes(name)}
-                     for name in listdir(_base_path)
-                     if (path.isdir(path.join(_base_path, name)) and
-                         not name.startswith("__"))}
+            for scheme in module.Schemes:
+                per_URI_connectors[scheme] = getattr(module, con_name + '_dialog')
+                schemes += [scheme]
 
 
 def ConnectorFactory(uri, confnodesroot):
@@ -63,41 +64,31 @@ def ConnectorFactory(uri, confnodesroot):
     Return a connector corresponding to the URI
     or None if cannot connect to URI
     """
-    servicetype = uri.split("://")[0].upper()
-    if servicetype == "LOCAL":
+    scheme = uri.split("://")[0].upper()
+    if scheme == "LOCAL":
         # Local is special case
         # pyro connection to local runtime
         # started on demand, listening on random port
-        servicetype = "PYRO"
+        scheme = "PYRO"
         runtime_port = confnodesroot.AppFrame.StartLocalRuntime(
             taskbaricon=True)
         uri = "PYROLOC://127.0.0.1:" + str(runtime_port)
-    elif servicetype in connectors:
+    elif scheme in connectors:
         pass
-    elif servicetype[-1] == 'S' and servicetype[:-1] in connectors:
-        servicetype = servicetype[:-1]
+    elif scheme[-1] == 'S' and scheme[:-1] in connectors:
+        scheme = scheme[:-1]
     else:
         return None
 
     # import module according to uri type
-    connectorclass = connectors[servicetype]()
+    connectorclass = connectors[scheme]()
     return connectorclass(uri, confnodesroot)
 
 
-def ConnectorDialog(conn_type, confnodesroot):
-    if conn_type not in connectors_dialog:
-        return None
+def EditorClassFromScheme(scheme):
+    _Import_Dialogs()
+    return per_URI_connectors.get(scheme, None) 
 
-    connectorclass = connectors_dialog[conn_type]["function"]()
-    return connectorclass(confnodesroot)
-
-
-def GetConnectorFromURI(uri):
-    typeOfConnector = None
-    for conn_type in connectors_dialog:
-        connectorTypes = connectors_dialog[conn_type]["URITypes"]()
-        if connectorTypes and uri in connectorTypes:
-            typeOfConnector = conn_type
-            break
-
-    return typeOfConnector
+def ConnectorSchemes():
+    _Import_Dialogs()
+    return schemes
