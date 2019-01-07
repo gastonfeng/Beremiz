@@ -7,7 +7,7 @@
  *
  * This Modbus library is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
+ * the Free Software Foundation, either version 2 of the License, or
  * (at your option) any later version.
  *
  * This program is distributed in the hope that it will be useful, but
@@ -206,16 +206,11 @@ static int __write_outbits (void *mem_map, u16 start_addr, u16 bit_count, u8  *d
 
 
 static int __read_inwords  (void *mem_map, u16 start_addr, u16 word_count, u16 *data_words) {
-  u16 count;
-  // return -ERR_ILLEGAL_FUNCTION; /* function not yet supported *//* ERR_ILLEGAL_FUNCTION defined in mb_util.h */
-  
+
   if ((start_addr + word_count) > MEM_AREA_SIZE)
     return -ERR_ILLEGAL_DATA_ADDRESS; /* ERR_ILLEGAL_DATA_ADDRESS defined in mb_util.h */
-  
-  /* use memcpy() as it is more efficient...
-  for (count = 0; count < word_count ; count++)
-    data_words[count] = ((server_mem_t *)mem_map)->ro_words[count + start_addr];
-  */
+
+  /* use memcpy() because loop with pointers (u16 *) caused alignment problems */
   memcpy(/* dest */ (void *)data_words,
          /* src  */ (void *)&(((server_mem_t *)mem_map)->ro_words[start_addr]),
          /* size */ word_count * 2);
@@ -225,16 +220,11 @@ static int __read_inwords  (void *mem_map, u16 start_addr, u16 word_count, u16 *
 
 
 static int __read_outwords (void *mem_map, u16 start_addr, u16 word_count, u16 *data_words) {
-  u16 count;
-  // return -ERR_ILLEGAL_FUNCTION; /* function not yet supported *//* ERR_ILLEGAL_FUNCTION defined in mb_util.h */
-  
+
   if ((start_addr + word_count) > MEM_AREA_SIZE)
     return -ERR_ILLEGAL_DATA_ADDRESS; /* ERR_ILLEGAL_DATA_ADDRESS defined in mb_util.h */
-  
-  /* use memcpy() as it is more efficient...
-  for (count = 0; count < word_count ; count++)
-    data_words[count] = ((server_mem_t *)mem_map)->rw_words[count + start_addr];
-  */
+
+  /* use memcpy() because loop with pointers (u16 *) caused alignment problems */
   memcpy(/* dest */ (void *)data_words,
          /* src  */ (void *)&(((server_mem_t *)mem_map)->rw_words[start_addr]),
          /* size */ word_count * 2);
@@ -245,9 +235,7 @@ static int __read_outwords (void *mem_map, u16 start_addr, u16 word_count, u16 *
 
 
 static int __write_outwords(void *mem_map, u16 start_addr, u16 word_count, u16 *data_words) {
-  u16 count;
-  // return -ERR_ILLEGAL_FUNCTION; /* function not yet supported *//* ERR_ILLEGAL_FUNCTION defined in mb_util.h */
-  
+
   if ((start_addr + word_count) > MEM_AREA_SIZE)
     return -ERR_ILLEGAL_DATA_ADDRESS; /* ERR_ILLEGAL_DATA_ADDRESS defined in mb_util.h */
 
@@ -405,7 +393,7 @@ static void *__mb_client_thread(void *_index)  {
 }
 
 
-
+int __cleanup_%(locstr)s ();
 int __init_%(locstr)s (int argc, char **argv){
 	int index;
 
@@ -512,12 +500,13 @@ void __publish_%(locstr)s (){
 	for (index=0; index < NUMBER_OF_CLIENT_REQTS; index ++){
 		/*just do the output requests */
 		if (client_requests[index].req_type == req_output){
-			pthread_mutex_lock(&(client_requests[index].coms_buf_mutex));
-			// copy from plcv_buffer to coms_buffer
-			memcpy((void *)client_requests[index].coms_buffer /* destination */,
-			       (void *)client_requests[index].plcv_buffer /* source */,
-			       REQ_BUF_SIZE * sizeof(u16) /* size in bytes */);
-			pthread_mutex_unlock(&(client_requests[index].coms_buf_mutex));
+			if(pthread_mutex_trylock(&(client_requests[index].coms_buf_mutex)) == 0){
+                // copy from plcv_buffer to coms_buffer
+                memcpy((void *)client_requests[index].coms_buffer /* destination */,
+                       (void *)client_requests[index].plcv_buffer /* source */,
+                       REQ_BUF_SIZE * sizeof(u16) /* size in bytes */);
+                pthread_mutex_unlock(&(client_requests[index].coms_buf_mutex));
+            }
 		}
 	}
 }
@@ -532,12 +521,13 @@ void __retrieve_%(locstr)s (){
 	for (index=0; index < NUMBER_OF_CLIENT_REQTS; index ++){
 		/*just do the input requests */
 		if (client_requests[index].req_type == req_input){
-			pthread_mutex_lock(&(client_requests[index].coms_buf_mutex));
-			// copy from coms_buffer to plcv_buffer
-			memcpy((void *)client_requests[index].plcv_buffer /* destination */,
-			       (void *)client_requests[index].coms_buffer /* source */,
-			       REQ_BUF_SIZE * sizeof(u16) /* size in bytes */);
-			pthread_mutex_unlock(&(client_requests[index].coms_buf_mutex));
+			if(pthread_mutex_trylock(&(client_requests[index].coms_buf_mutex)) == 0){
+                // copy from coms_buffer to plcv_buffer
+                memcpy((void *)client_requests[index].plcv_buffer /* destination */,
+                       (void *)client_requests[index].coms_buffer /* source */,
+                       REQ_BUF_SIZE * sizeof(u16) /* size in bytes */);
+                pthread_mutex_unlock(&(client_requests[index].coms_buf_mutex));
+            }
 		}
 	}
 }

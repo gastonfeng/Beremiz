@@ -22,13 +22,14 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import time
-import wx
-import subprocess, ctypes
+
+from __future__ import absolute_import
+import os
+import sys
+import subprocess
+import ctypes
 from threading import Timer, Lock, Thread, Semaphore
-import os, sys
-if os.name == 'posix':
-    from signal import SIGTERM, SIGKILL
+import signal
 
 
 class outputThread(Thread):
@@ -48,36 +49,39 @@ class outputThread(Thread):
     def run(self):
         outchunk = None
         self.retval = None
-        while self.retval is None and not self.killed :
+        while self.retval is None and not self.killed:
             if self.endcallback:
                 self.retval = self.Proc.poll()
             else:
                 self.retval = self.Proc.returncode
-                
+
             outchunk = self.fd.readline()
-            if self.callback : self.callback(outchunk)
-        while outchunk != '' and not self.killed :
+            if self.callback:
+                self.callback(outchunk)
+        while outchunk != '' and not self.killed:
             outchunk = self.fd.readline()
-            if self.callback : self.callback(outchunk)
+            if self.callback:
+                self.callback(outchunk)
         if self.endcallback:
             try:
                 err = self.Proc.wait()
-            except:
+            except Exception:
                 err = self.retval
             self.finished = True
             self.endcallback(self.Proc.pid, err)
 
-class ProcessLogger:
-    def __init__(self, logger, Command, finish_callback = None,
-                 no_stdout = False, no_stderr = False, no_gui = True,
-                 timeout = None, outlimit = None, errlimit = None,
-                 endlog = None, keyword = None, kill_it = False, cwd = None,
-                 encoding = None):
+
+class ProcessLogger(object):
+    def __init__(self, logger, Command, finish_callback=None,
+                 no_stdout=False, no_stderr=False, no_gui=True,
+                 timeout=None, outlimit=None, errlimit=None,
+                 endlog=None, keyword=None, kill_it=False, cwd=None,
+                 encoding=None, output_encoding=None):
         self.logger = logger
         if not isinstance(Command, list):
             self.Command_str = Command
             self.Command = []
-            for i,word in enumerate(Command.replace("'",'"').split('"')):
+            for i, word in enumerate(Command.replace("'", '"').split('"')):
                 if i % 2 == 0:
                     word = word.strip()
                     if len(word) > 0:
@@ -89,6 +93,7 @@ class ProcessLogger:
             self.Command_str = subprocess.list2cmdline(self.Command)
 
         fsencoding = sys.getfilesystemencoding()
+        self.output_encoding = output_encoding
 
         if encoding is None:
             encoding = fsencoding
@@ -108,55 +113,59 @@ class ProcessLogger:
         self.errdata = []
         self.keyword = keyword
         self.kill_it = kill_it
-        self.startsem = Semaphore(0)        
+        self.startsem = Semaphore(0)
         self.finishsem = Semaphore(0)
         self.endlock = Lock()
 
-        popenargs= {
-               "cwd":os.getcwd() if cwd is None else cwd,
-               "stdin":subprocess.PIPE,
-               "stdout":subprocess.PIPE,
-               "stderr":subprocess.PIPE}
+        popenargs = {
+            "cwd":    os.getcwd() if cwd is None else cwd,
+            "stdin":  subprocess.PIPE,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE
+        }
 
-        if no_gui == True and wx.Platform == '__WXMSW__':
+        if no_gui and os.name in ("nt", "ce"):
             self.startupinfo = subprocess.STARTUPINFO()
             self.startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             popenargs["startupinfo"] = self.startupinfo
-        elif wx.Platform == '__WXGTK__':
+        elif os.name == 'posix':
             popenargs["shell"] = False
 
         if timeout:
-            self.timeout = Timer(timeout,self.endlog)
+            self.timeout = Timer(timeout, self.endlog)
             self.timeout.start()
         else:
             self.timeout = None
-            
-        self.Proc = subprocess.Popen( self.Command, **popenargs )
+
+        self.Proc = subprocess.Popen(self.Command, **popenargs)
 
         self.outt = outputThread(
-                      self.Proc,
-                      self.Proc.stdout,
-                      self.output,
-                      self.finish)
+            self.Proc,
+            self.Proc.stdout,
+            self.output,
+            self.finish)
         self.outt.start()
 
         self.errt = outputThread(
-                      self.Proc,
-                      self.Proc.stderr,
-                      self.errors)
+            self.Proc,
+            self.Proc.stderr,
+            self.errors)
         self.errt.start()
         self.startsem.release()
 
-
-    def output(self,v):
+    def output(self, v):
+        if v and self.output_encoding:
+            v = v.decode(self.output_encoding)
         self.outdata.append(v)
         self.outlen += 1
         if not self.no_stdout:
             self.logger.write(v)
-        if (self.keyword and v.find(self.keyword)!=-1) or (self.outlimit and self.outlen > self.outlimit):
+        if (self.keyword and v.find(self.keyword) != -1) or (self.outlimit and self.outlen > self.outlimit):
             self.endlog()
 
-    def errors(self,v):
+    def errors(self, v):
+        if v and self.output_encoding:
+            v = v.decode(self.output_encoding)
         self.errdata.append(v)
         self.errlen += 1
         if not self.no_stderr:
@@ -164,43 +173,44 @@ class ProcessLogger:
         if self.errlimit and self.errlen > self.errlimit:
             self.endlog()
 
-    def log_the_end(self,ecode,pid):
+    def log_the_end(self, ecode, pid):
         self.logger.write(self.Command_str + "\n")
-        self.logger.write_warning(_("exited with status {a1} (pid {a2})\n").format(a1 = str(ecode), a2 = str(pid)))
+        self.logger.write_warning(_("exited with status {a1} (pid {a2})\n").format(a1=str(ecode), a2=str(pid)))
 
-    def finish(self, pid,ecode):
-        # avoid running function before start is finished        
+    def finish(self, pid, ecode):
+        # avoid running function before start is finished
         self.startsem.acquire()
+        self.startsem.release()
         if self.timeout:
             self.timeout.cancel()
         self.exitcode = ecode
         if self.exitcode != 0:
-            self.log_the_end(ecode,pid)
+            self.log_the_end(ecode, pid)
         if self.finish_callback is not None:
-            self.finish_callback(self,ecode,pid)
+            self.finish_callback(self, ecode, pid)
         self.errt.join()
         self.finishsem.release()
 
-    def kill(self,gently=True):
+    def kill(self, gently=True):
         # avoid running kill before start is finished
         self.startsem.acquire()
         self.startsem.release()
-        
+
         self.outt.killed = True
         self.errt.killed = True
-        if wx.Platform == '__WXMSW__':
+        if os.name in ("nt", "ce"):
             PROCESS_TERMINATE = 1
             handle = ctypes.windll.kernel32.OpenProcess(PROCESS_TERMINATE, False, self.Proc.pid)
             ctypes.windll.kernel32.TerminateProcess(handle, -1)
             ctypes.windll.kernel32.CloseHandle(handle)
         else:
             if gently:
-                sig=SIGTERM
+                sig = signal.SIGTERM
             else:
-                sig=SIGKILL
+                sig = signal.SIGKILL
             try:
                 os.kill(self.Proc.pid, sig)
-            except:
+            except Exception:
                 pass
         self.outt.join()
         self.errt.join()
@@ -208,11 +218,9 @@ class ProcessLogger:
     def endlog(self):
         if self.endlock.acquire(False):
             if not self.outt.finished and self.kill_it:
-               self.kill()
+                self.kill()
             self.finishsem.release()
-
 
     def spin(self):
         self.finishsem.acquire()
         return [self.exitcode, "".join(self.outdata), "".join(self.errdata)]
-

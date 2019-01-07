@@ -5,6 +5,7 @@
 # programming IEC 61131-3 automates supporting plcopen standard and CanFestival.
 #
 # Copyright (C) 2007: Edouard TISSERANT and Laurent BESSARD
+# Copyright (C) 2017: Andrey Skvortsov
 #
 # See COPYING file for copyrights details.
 #
@@ -23,30 +24,34 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from os.path import join, split, realpath
-sd = split(realpath(__file__))[0]
+from __future__ import absolute_import
+from os.path import join
+import util.paths as paths
+from util.TranslationCatalogs import NoTranslate
+sd = paths.AbsDir(__file__)
 
 # Override gettext _ in this module
 # since we just want string to be added to dictionnary
 # but translation should happen here
-_ = lambda x:x
+_ = NoTranslate
 
-LANGUAGES = ["IL","ST","FBD","LD","SFC"]
+LANGUAGES = ["IL", "ST", "FBD", "LD", "SFC"]
 
-LOCATIONDATATYPES = {"X" : ["BOOL"],
-                     "B" : ["SINT", "USINT", "BYTE", "STRING"],
-                     "W" : ["INT", "UINT", "WORD", "WSTRING"],
-                     "D" : ["DINT", "UDINT", "REAL", "DWORD"],
-                     "L" : ["LINT", "ULINT", "LREAL", "LWORD"]}
+LOCATIONDATATYPES = {"X": ["BOOL"],
+                     "B": ["SINT", "USINT", "BYTE", "STRING"],
+                     "W": ["INT", "UINT", "WORD", "WSTRING"],
+                     "D": ["DINT", "UDINT", "REAL", "DWORD"],
+                     "L": ["LINT", "ULINT", "LREAL", "LWORD"]}
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 #                        Function Block Types definitions
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
-StdTC6Libs = [(_("Standard function blocks"),  join(sd, "Standard_Function_Blocks.xml")),
-              (_("Additional function blocks"),join(sd, "Additional_Function_Blocks.xml"))]
+StdTC6Libs = [(_("Standard function blocks"),   join(sd, "Standard_Function_Blocks.xml")),
+              (_("Additional function blocks"), join(sd, "Additional_Function_Blocks.xml"))]
 
-StdFuncsCSV = join(sd,"iec_std.csv")
+StdFuncsCSV = join(sd, "iec_std.csv")
+
 
 def GetBlockInfos(pou):
     infos = pou.getblockInfos()
@@ -57,15 +62,15 @@ def GetBlockInfos(pou):
         for var_name, var_type, var_modifier in infos["inputs"]]
     return infos
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 #                           Data Types definitions
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
-"""
-Ordored list of common data types defined in the IEC 61131-3
-Each type is associated to his direct parent type. It defines then a hierarchy
-between type that permits to make a comparison of two types
-"""
+
+#: Ordored list of common data types defined in the IEC 61131-3
+#: Each type is associated to his direct parent type. It defines then a hierarchy
+#: between type that permits to make a comparison of two types
+
 TypeHierarchy_list = [
     ("ANY", None),
     ("ANY_DERIVED", "ANY"),
@@ -100,45 +105,45 @@ TypeHierarchy_list = [
     ("WORD", "ANY_NBIT"),
     ("DWORD", "ANY_NBIT"),
     ("LWORD", "ANY_NBIT")
-    #("WSTRING", "ANY_STRING") # TODO
+    # ("WSTRING", "ANY_STRING") # TODO
 ]
 
 DefaultType = "DINT"
 
 DataTypeRange_list = [
-    ("SINT", (-2**7, 2**7 - 1)),
-    ("INT", (-2**15, 2**15 - 1)),
-    ("DINT", (-2**31, 2**31 - 1)),
-    ("LINT", (-2**31, 2**31 - 1)),
-    ("USINT", (0, 2**8 - 1)),
-    ("UINT", (0, 2**16 - 1)),
-    ("UDINT", (0, 2**31 - 1)),
-    ("ULINT", (0, 2**31 - 1))
+    ("SINT",  (-2**7,  2**7 - 1)),
+    ("INT",   (-2**15, 2**15 - 1)),
+    ("DINT",  (-2**31, 2**31 - 1)),
+    ("LINT",  (-2**63, 2**63 - 1)),
+    ("USINT", (0,      2**8 - 1)),
+    ("UINT",  (0,      2**16 - 1)),
+    ("UDINT", (0,      2**32 - 1)),
+    ("ULINT", (0,      2**64 - 1))
 ]
 
 ANY_TO_ANY_FILTERS = {
-    "ANY_TO_ANY":[
+    "ANY_TO_ANY": [
         # simple type conv are let as C cast
-        (("ANY_INT","ANY_BIT"),("ANY_NUM","ANY_BIT")),
-        (("ANY_REAL",),("ANY_REAL",)),
+        (("ANY_INT", "ANY_BIT"), ("ANY_NUM", "ANY_BIT")),
+        (("ANY_REAL",), ("ANY_REAL",)),
         # REAL_TO_INT
-        (("ANY_REAL",),("ANY_SINT",)),
-        (("ANY_REAL",),("ANY_UINT",)),
-        (("ANY_REAL",),("ANY_BIT",)),
+        (("ANY_REAL",), ("ANY_SINT",)),
+        (("ANY_REAL",), ("ANY_UINT",)),
+        (("ANY_REAL",), ("ANY_BIT",)),
         # TO_TIME
-        (("ANY_INT","ANY_BIT"),("ANY_DATE","TIME")),
-        (("ANY_REAL",),("ANY_DATE","TIME")),
-        (("ANY_STRING",), ("ANY_DATE","TIME")),
+        (("ANY_INT", "ANY_BIT"), ("ANY_DATE", "TIME")),
+        (("ANY_REAL",),          ("ANY_DATE", "TIME")),
+        (("ANY_STRING",),        ("ANY_DATE", "TIME")),
         # FROM_TIME
-        (("ANY_DATE","TIME"), ("ANY_REAL",)),
-        (("ANY_DATE","TIME"), ("ANY_INT","ANY_NBIT")),
+        (("ANY_DATE", "TIME"), ("ANY_REAL",)),
+        (("ANY_DATE", "TIME"), ("ANY_INT", "ANY_NBIT")),
         (("TIME",), ("ANY_STRING",)),
         (("DATE",), ("ANY_STRING",)),
-        (("TOD",), ("ANY_STRING",)),
-        (("DT",), ("ANY_STRING",)),
+        (("TOD",),  ("ANY_STRING",)),
+        (("DT",),   ("ANY_STRING",)),
         # TO_STRING
-        (("BOOL",), ("ANY_STRING",)),
-        (("ANY_BIT",), ("ANY_STRING",)),
+        (("BOOL",),     ("ANY_STRING",)),
+        (("ANY_BIT",),  ("ANY_STRING",)),
         (("ANY_REAL",), ("ANY_STRING",)),
         (("ANY_SINT",), ("ANY_STRING",)),
         (("ANY_UINT",), ("ANY_STRING",)),
@@ -147,17 +152,20 @@ ANY_TO_ANY_FILTERS = {
         (("ANY_STRING",), ("ANY_BIT",)),
         (("ANY_STRING",), ("ANY_SINT",)),
         (("ANY_STRING",), ("ANY_UINT",)),
-        (("ANY_STRING",), ("ANY_REAL",))],
-    "BCD_TO_ANY":[
-        (("BYTE",),("USINT",)),
-        (("WORD",),("UINT",)),
-        (("DWORD",),("UDINT",)),
-        (("LWORD",),("ULINT",))],
-    "ANY_TO_BCD":[
-        (("USINT",),("BYTE",)),
-        (("UINT",),("WORD",)),
-        (("UDINT",),("DWORD",)),
-        (("ULINT",),("LWORD",))]
+        (("ANY_STRING",), ("ANY_REAL",))
+    ],
+    "BCD_TO_ANY": [
+        (("BYTE",),  ("USINT",)),
+        (("WORD",),  ("UINT",)),
+        (("DWORD",), ("UDINT",)),
+        (("LWORD",), ("ULINT",))
+    ],
+    "ANY_TO_BCD": [
+        (("USINT",), ("BYTE",)),
+        (("UINT",),  ("WORD",)),
+        (("UDINT",), ("DWORD",)),
+        (("ULINT",), ("LWORD",))
+    ]
 }
 
 # remove gettext override

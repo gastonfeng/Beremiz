@@ -22,19 +22,22 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+
+from __future__ import absolute_import
 from editors.TextViewer import TextViewer
 from plcopen.plcopen import TestTextElement
 
+
 class IECCodeViewer(TextViewer):
-    
+
     def __del__(self):
         TextViewer.__del__(self)
         if getattr(self, "_OnClose"):
             self._OnClose(self)
-    
+
     def Paste(self):
         if self.Controler is not None:
             TextViewer.Paste(self)
-    
+
     def Search(self, criteria):
         return [((self.TagName, "body", 0),) + result for result in TestTextElement(self.Editor.GetText(), criteria)]

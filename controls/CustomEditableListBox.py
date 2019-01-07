@@ -22,19 +22,22 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+
+from __future__ import absolute_import
 import wx
 import wx.gizmos
 
+
 class CustomEditableListBox(wx.gizmos.EditableListBox):
-    
+
     def __init__(self, *args, **kwargs):
         wx.gizmos.EditableListBox.__init__(self, *args, **kwargs)
-        
+
         listbox = self.GetListCtrl()
         listbox.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
         listbox.Bind(wx.EVT_LIST_BEGIN_LABEL_EDIT, self.OnLabelBeginEdit)
         listbox.Bind(wx.EVT_LIST_END_LABEL_EDIT, self.OnLabelEndEdit)
-        
+
         for button, tooltip, call_function in [
                 (self.GetEditButton(), _("Edit item"), "_OnEditButton"),
                 (self.GetNewButton(), _("New item"), "_OnNewButton"),
@@ -43,13 +46,13 @@ class CustomEditableListBox(wx.gizmos.EditableListBox):
                 (self.GetDownButton(), _("Move down"), "_OnDownButton")]:
             button.SetToolTipString(tooltip)
             button.Bind(wx.EVT_BUTTON, self.GetButtonPressedFunction(call_function))
-    
+
         self.Editing = False
-    
+
     def EnsureCurrentItemVisible(self):
         listctrl = self.GetListCtrl()
         listctrl.EnsureVisible(listctrl.GetFocusedItem())
-    
+
     def OnLabelBeginEdit(self, event):
         self.Editing = True
         func = getattr(self, "_OnLabelBeginEdit", None)
@@ -57,7 +60,7 @@ class CustomEditableListBox(wx.gizmos.EditableListBox):
             func(event)
         else:
             event.Skip()
-        
+
     def OnLabelEndEdit(self, event):
         self.Editing = False
         func = getattr(self, "_OnLabelEndEdit", None)
@@ -65,7 +68,7 @@ class CustomEditableListBox(wx.gizmos.EditableListBox):
             func(event)
         else:
             event.Skip()
-    
+
     def GetButtonPressedFunction(self, call_function):
         def OnButtonPressed(event):
             if wx.Platform != '__WXMSW__' or not self.Editing:
@@ -77,7 +80,7 @@ class CustomEditableListBox(wx.gizmos.EditableListBox):
                     wx.CallAfter(self.EnsureCurrentItemVisible)
                     event.Skip()
         return OnButtonPressed
-    
+
     def OnKeyDown(self, event):
         button = None
         keycode = event.GetKeyCode()

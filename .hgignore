@@ -1,7 +1,10 @@
 .project
 
-syntax: glob
-bug_report*
+.directory
+.pytest_cache
+.cache
+.coverage_full
+
 syntax: regexp
 ^tests/.*/build$
 ^.idea/.*
@@ -15,3 +18,6 @@ syntax: regexp
 bug_report.*\.txt
 i18n/.*.new$
 revision
+
+doc/_build
+doc/locale

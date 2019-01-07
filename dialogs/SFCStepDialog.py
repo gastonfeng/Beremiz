@@ -5,6 +5,7 @@
 # programming IEC 61131-3 automates supporting plcopen standard and CanFestival.
 #
 # Copyright (C) 2007: Edouard TISSERANT and Laurent BESSARD
+# Copyright (C) 2017: Andrey Skvortsov <andrej.skvortzov@gmail.com>
 #
 # See COPYING file for copyrights details.
 #
@@ -22,22 +23,24 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+
+from __future__ import absolute_import
 import wx
 
 from graphics.SFC_Objects import SFC_Step
-from BlockPreviewDialog import BlockPreviewDialog
+from dialogs.BlockPreviewDialog import BlockPreviewDialog
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 #                         Set SFC Step Parameters Dialog
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
-"""
-Class that implements a dialog for defining parameters of a SFC step graphic
-element
-"""
 
 class SFCStepDialog(BlockPreviewDialog):
-    
+    """
+    Class that implements a dialog for defining parameters of a SFC step graphic
+    element
+    """
+
     def __init__(self, parent, controller, tagname, initial=False):
         """
         Constructor
@@ -46,25 +49,25 @@ class SFCStepDialog(BlockPreviewDialog):
         @param tagname: Tagname of project POU edited
         @param initial: True if step is initial (default: False)
         """
-        BlockPreviewDialog.__init__(self,parent, controller, tagname,  
-              size=wx.Size(400, 280), title=_('Edit Step'))
-        
+        BlockPreviewDialog.__init__(self, parent, controller, tagname,
+                                    title=_('Edit Step'))
+
         # Init common sizers
         self._init_sizers(2, 0, 6, None, 2, 1)
-        
+
         # Create label for SFC step name
         name_label = wx.StaticText(self, label=_('Name:'))
         self.LeftGridSizer.AddWindow(name_label, flag=wx.GROW)
-        
+
         # Create text control for defining SFC step name
         self.StepName = wx.TextCtrl(self)
         self.Bind(wx.EVT_TEXT, self.OnNameChanged, self.StepName)
         self.LeftGridSizer.AddWindow(self.StepName, flag=wx.GROW)
-        
+
         # Create label for SFC step connectors
         connectors_label = wx.StaticText(self, label=_('Connectors:'))
         self.LeftGridSizer.AddWindow(connectors_label, flag=wx.GROW)
-        
+
         # Create check boxes for defining connectors available on SFC step
         self.ConnectorsCheckBox = {}
         for name, label in [("input", _("Input")),
@@ -76,25 +79,28 @@ class SFCStepDialog(BlockPreviewDialog):
             self.Bind(wx.EVT_CHECKBOX, self.OnConnectorsChanged, check_box)
             self.LeftGridSizer.AddWindow(check_box, flag=wx.GROW)
             self.ConnectorsCheckBox[name] = check_box
-        
+
         # Add preview panel and associated label to sizers
         self.RightGridSizer.AddWindow(self.PreviewLabel, flag=wx.GROW)
         self.RightGridSizer.AddWindow(self.Preview, flag=wx.GROW)
-        
+
         # Add buttons sizer to sizers
-        self.MainSizer.AddSizer(self.ButtonSizer, border=20, 
-              flag=wx.ALIGN_RIGHT|wx.BOTTOM|wx.LEFT|wx.RIGHT)
-        
+        self.MainSizer.AddSizer(
+            self.ButtonSizer, border=20,
+            flag=wx.ALIGN_RIGHT | wx.BOTTOM | wx.LEFT | wx.RIGHT)
+
         # Save flag that indicates that step is initial
         self.Initial = initial
-        
+
         # Set default name for step
         self.StepName.ChangeValue(controller.GenerateNewName(
-               tagname, None, "Step%d", 0))
-        
+            tagname, None, "Step%d", 0))
+
+        self.Fit()
+
         # Step name text control is default control having keyboard focus
         self.StepName.SetFocus()
-    
+
     def SetValues(self, values):
         """
         Set default block parameters
@@ -102,20 +108,20 @@ class SFCStepDialog(BlockPreviewDialog):
         """
         # For each parameters defined, set corresponding control value
         for name, value in values.items():
-            
+
             # Parameter is step name
             if name == "name":
                 self.StepName.ChangeValue(value)
-        
+
             # Set value of other controls
             else:
                 control = self.ConnectorsCheckBox.get(name, None)
                 if control is not None:
                     control.SetValue(value)
-        
+
         # Refresh preview panel
         self.RefreshPreview()
-        
+
     def GetValues(self):
         """
         Return step parameters defined in dialog
@@ -127,7 +133,7 @@ class SFCStepDialog(BlockPreviewDialog):
             for name, control in self.ConnectorsCheckBox.iteritems()})
         values["width"], values["height"] = self.Element.GetSize()
         return values
-    
+
     def OnOK(self, event):
         """
         Called when dialog OK button is pressed
@@ -135,23 +141,23 @@ class SFCStepDialog(BlockPreviewDialog):
         @param event: wx.Event from OK button
         """
         message = None
-        
+
         # Get step name typed by user
         step_name = self.StepName.GetValue()
-        
+
         # Test that a name have been defined
         if step_name == "":
             message = _("Form isn't complete. Name must be filled!")
-        
+
         # If an error have been identify, show error message dialog
         if message is not None:
             self.ShowErrorMessage(message)
-        
+
         # Test step name validity
         elif self.TestElementName(step_name):
             # Call BlockPreviewDialog function
             BlockPreviewDialog.OnOK(self, event)
-    
+
     def OnConnectorsChanged(self, event):
         """
         Called when a step connector value changed
@@ -167,23 +173,23 @@ class SFCStepDialog(BlockPreviewDialog):
         """
         self.RefreshPreview()
         event.Skip()
-    
+
     def RefreshPreview(self):
         """
         Refresh preview panel of graphic element
         Override BlockPreviewDialog function
         """
         # Set graphic element displayed, creating a SFC step element
-        self.Element = SFC_Step(self.Preview, 
-                                self.StepName.GetValue(), 
+        self.Element = SFC_Step(self.Preview,
+                                self.StepName.GetValue(),
                                 self.Initial)
-        
+
         # Update connectors of SFC step element according to check boxes value
         for name, control in self.ConnectorsCheckBox.iteritems():
             if control.IsChecked():
                 getattr(self.Element, "Add" + name.capitalize())()
             else:
                 getattr(self.Element, "Remove" + name.capitalize())()
-        
+
         # Call BlockPreviewDialog function
         BlockPreviewDialog.RefreshPreview(self)

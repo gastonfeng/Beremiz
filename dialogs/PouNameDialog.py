@@ -22,23 +22,27 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import wx
 
-#-------------------------------------------------------------------------------
+from __future__ import absolute_import
+import wx
+from plcopen.structures import TestIdentifier, IEC_KEYWORDS
+
+# -------------------------------------------------------------------------------
 #                                POU Name Dialog
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
+
 
 class PouNameDialog(wx.TextEntryDialog):
 
-    def __init__(self, parent, message, caption = "Please enter text", defaultValue = "", 
-                       style = wx.OK|wx.CANCEL|wx.CENTRE, pos = wx.DefaultPosition):
+    def __init__(self, parent, message, caption=_("Please enter text"), defaultValue="",
+                 style=wx.OK | wx.CANCEL | wx.CENTRE, pos=wx.DefaultPosition):
         wx.TextEntryDialog.__init__(self, parent, message, caption, defaultValue, style, pos)
-        
+
         self.PouNames = []
-        
-        self.Bind(wx.EVT_BUTTON, self.OnOK, 
-              self.GetSizer().GetItem(2).GetSizer().GetItem(1).GetSizer().GetAffirmativeButton())
-        
+
+        self.Bind(wx.EVT_BUTTON, self.OnOK,
+                  self.GetSizer().GetItem(2).GetSizer().GetItem(1).GetSizer().GetAffirmativeButton())
+
     def OnOK(self, event):
         message = None
         step_name = self.GetSizer().GetItem(1).GetWindow().GetValue()
@@ -51,7 +55,7 @@ class PouNameDialog(wx.TextEntryDialog):
         elif step_name.upper() in self.PouNames:
             message = _("A POU named \"%s\" already exists!") % step_name
         if message is not None:
-            dialog = wx.MessageDialog(self, message, _("Error"), wx.OK|wx.ICON_ERROR)
+            dialog = wx.MessageDialog(self, message, _("Error"), wx.OK | wx.ICON_ERROR)
             dialog.ShowModal()
             dialog.Destroy()
         else:
@@ -60,4 +64,3 @@ class PouNameDialog(wx.TextEntryDialog):
 
     def SetPouNames(self, pou_names):
         self.PouNames = [pou_name.upper() for pou_name in pou_names]
-

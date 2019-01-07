@@ -22,6 +22,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+
+from __future__ import absolute_import
 import wx
 import wx.grid
 
@@ -30,8 +32,9 @@ if wx.Platform == '__WXMSW__':
 else:
     ROW_HEIGHT = 28
 
+
 class CustomTable(wx.grid.PyGridTableBase):
-    
+
     """
     A custom wx.grid.Grid Table using user supplied data
     """
@@ -47,10 +50,10 @@ class CustomTable(wx.grid.PyGridTableBase):
         # see if the table has changed size
         self._rows = self.GetNumberRows()
         self._cols = self.GetNumberCols()
-    
+
     def GetNumberCols(self):
         return len(self.colnames)
-        
+
     def GetNumberRows(self):
         return len(self.data)
 
@@ -66,11 +69,11 @@ class CustomTable(wx.grid.PyGridTableBase):
     def GetValue(self, row, col):
         if row < self.GetNumberRows():
             return self.data[row].get(self.GetColLabelValue(col, False), "")
-    
+
     def SetValue(self, row, col, value):
         if col < len(self.colnames):
             self.data[row][self.GetColLabelValue(col, False)] = value
-    
+
     def GetValueByName(self, row, colname):
         if row < self.GetNumberRows():
             return self.data[row].get(colname)
@@ -87,14 +90,24 @@ class CustomTable(wx.grid.PyGridTableBase):
         grid.CloseEditControl()
         grid.BeginBatch()
         for current, new, delmsg, addmsg in [
-            (self._rows, self.GetNumberRows(), wx.grid.GRIDTABLE_NOTIFY_ROWS_DELETED, wx.grid.GRIDTABLE_NOTIFY_ROWS_APPENDED),
-            (self._cols, self.GetNumberCols(), wx.grid.GRIDTABLE_NOTIFY_COLS_DELETED, wx.grid.GRIDTABLE_NOTIFY_COLS_APPENDED),
+                (
+                    self._rows,
+                    self.GetNumberRows(),
+                    wx.grid.GRIDTABLE_NOTIFY_ROWS_DELETED,
+                    wx.grid.GRIDTABLE_NOTIFY_ROWS_APPENDED
+                ),
+                (
+                    self._cols,
+                    self.GetNumberCols(),
+                    wx.grid.GRIDTABLE_NOTIFY_COLS_DELETED,
+                    wx.grid.GRIDTABLE_NOTIFY_COLS_APPENDED
+                ),
         ]:
             if new < current:
-                msg = wx.grid.GridTableMessage(self,delmsg,new,current-new)
+                msg = wx.grid.GridTableMessage(self, delmsg, new, current-new)
                 grid.ProcessTableMessage(msg)
             elif new > current:
-                msg = wx.grid.GridTableMessage(self,addmsg,new-current)
+                msg = wx.grid.GridTableMessage(self, addmsg, new-current)
                 grid.ProcessTableMessage(msg)
                 self.UpdateValues(grid)
         grid.EndBatch()
@@ -125,33 +138,33 @@ class CustomTable(wx.grid.PyGridTableBase):
             row_highlights = self.Highlights.get(row, {})
             for col in range(self.GetNumberCols()):
                 colname = self.GetColLabelValue(col, False)
-                
+
                 grid.SetReadOnly(row, col, True)
                 grid.SetCellEditor(row, col, None)
                 grid.SetCellRenderer(row, col, None)
-                
+
                 highlight_colours = row_highlights.get(colname.lower(), [(wx.WHITE, wx.BLACK)])[-1]
                 grid.SetCellBackgroundColour(row, col, highlight_colours[0])
                 grid.SetCellTextColour(row, col, highlight_colours[1])
             self.ResizeRow(grid, row)
-    
+
     def ResizeRow(self, grid, row):
         if grid.GetRowSize(row) < ROW_HEIGHT:
             grid.SetRowMinimalHeight(row, ROW_HEIGHT)
             grid.AutoSizeRow(row, False)
-    
+
     def SetData(self, data):
         self.data = data
-    
+
     def GetData(self):
         return self.data
-    
+
     def GetCurrentIndex(self):
         return self.CurrentIndex
-    
+
     def SetCurrentIndex(self, index):
         self.CurrentIndex = index
-    
+
     def AppendRow(self, row_content):
         self.data.append(row_content)
 
@@ -191,7 +204,7 @@ class CustomTable(wx.grid.PyGridTableBase):
         if highlight_type is None:
             self.Highlights = {}
         else:
-            for row, row_highlights in self.Highlights.iteritems():
+            for _row, row_highlights in self.Highlights.iteritems():
                 row_items = row_highlights.items()
                 for col, col_highlights in row_items:
                     if highlight_type in col_highlights:
