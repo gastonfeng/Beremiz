@@ -22,26 +22,29 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+
+from __future__ import absolute_import
 import keyword
 import wx.stc as stc
 
 from controls.CustomStyledTextCtrl import faces
 from editors.CodeFileEditor import CodeFileEditor, CodeEditor
 
+
 class PythonCodeEditor(CodeEditor):
 
     KEYWORDS = keyword.kwlist
     COMMENT_HEADER = "#"
-    
+
     def SetCodeLexer(self):
         self.SetLexer(stc.STC_LEX_PYTHON)
-        
+
         # Line numbers in margin
-        self.StyleSetSpec(stc.STC_STYLE_LINENUMBER,'fore:#000000,back:#99A9C2,size:%(size)d' % faces)    
+        self.StyleSetSpec(stc.STC_STYLE_LINENUMBER, 'fore:#000000,back:#99A9C2,size:%(size)d' % faces)
         # Highlighted brace
-        self.StyleSetSpec(stc.STC_STYLE_BRACELIGHT,'fore:#00009D,back:#FFFF00,size:%(size)d' % faces)
+        self.StyleSetSpec(stc.STC_STYLE_BRACELIGHT, 'fore:#00009D,back:#FFFF00,size:%(size)d' % faces)
         # Unmatched brace
-        self.StyleSetSpec(stc.STC_STYLE_BRACEBAD,'fore:#00009D,back:#FF0000,size:%(size)d' % faces)
+        self.StyleSetSpec(stc.STC_STYLE_BRACEBAD, 'fore:#00009D,back:#FF0000,size:%(size)d' % faces)
         # Indentation guide
         self.StyleSetSpec(stc.STC_STYLE_INDENTGUIDE, 'fore:#CDCDCD,size:%(size)d' % faces)
 
@@ -69,15 +72,14 @@ class PythonCodeEditor(CodeEditor):
         # Identifiers. I leave this as not bold because everything seems
         # to be an identifier if it doesn't match the above criterae
         self.StyleSetSpec(stc.STC_P_IDENTIFIER, 'fore:#000000,size:%(size)d' % faces)
-        
 
-#-------------------------------------------------------------------------------
+
+# -------------------------------------------------------------------------------
 #                          CFileEditor Main Frame Class
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
 class PythonEditor(CodeFileEditor):
-    
+
     CONFNODEEDITOR_TABS = [
         (_("Python code"), "_create_CodePanel")]
     CODE_EDITOR = PythonCodeEditor
-

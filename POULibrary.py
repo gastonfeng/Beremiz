@@ -22,9 +22,12 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+
+from __future__ import absolute_import
 from weakref import ref
 
-class POULibrary:
+
+class POULibrary(object):
     def __init__(self, CTR, LibName, TypeStack):
         from PLCControler import PLCControler
         self.CTR = ref(CTR)
@@ -33,21 +36,21 @@ class POULibrary:
         self.LibraryControler.OpenXMLFile(self.GetLibraryPath())
         self.LibraryControler.ClearConfNodeTypes()
         self.LibraryControler.AddConfNodeTypesList(TypeStack)
-        self.program = None;
+        self.program = None
 
     def GetSTCode(self):
         if not self.program:
             self.program = self.LibraryControler.GenerateProgram()[0]+"\n"
-        return self.program 
+        return self.program
 
     def GetName(self):
         return self.LibName
 
     def GetCTR(self):
         return self.CTR()
-        
+
     def GetTypes(self):
-        return {"name" : self.GetName(), "types": self.LibraryControler.Project}
+        return {"name": self.GetName(), "types": self.LibraryControler.Project}
 
     def GetLibraryPath(self):
         raise Exception("Not implemented")
@@ -55,3 +58,10 @@ class POULibrary:
     def Generate_C(self, buildpath, varlist, IECCFLAGS):
         # Pure python or IEC libs doesn't produce C code
         return ((""), [], False), ""
+
+
+def SimplePOULibraryFactory(path):
+    class SimplePOULibrary(POULibrary):
+        def GetLibraryPath(self):
+            return path
+    return SimplePOULibrary

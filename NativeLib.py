@@ -5,6 +5,7 @@
 # programming IEC 61131-3 automates supporting plcopen standard and CanFestival.
 #
 # Copyright (C) 2007: Edouard TISSERANT and Laurent BESSARD
+# Copyright (C) 2017: Andrey Skvortsov
 #
 # See COPYING file for copyrights details.
 #
@@ -22,10 +23,10 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import os
-from POULibrary import POULibrary
 
-class NativeLibrary(POULibrary):
-    def GetLibraryPath(self):
-        return os.path.join(os.path.split(__file__)[0], "NativeLib.xml") 
+from __future__ import absolute_import
+import util.paths as paths
+from POULibrary import SimplePOULibraryFactory
 
+NativeLibrary = SimplePOULibraryFactory(
+    paths.AbsNeighbourFile(__file__, "NativeLib.xml"))

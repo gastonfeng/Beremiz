@@ -30,14 +30,12 @@
 This module contains classes extended from wx.Dialog used by the GUI.
 """
 
+
+from __future__ import absolute_import
 import os
-import sys
-import time
 import wx
 from wx.lib.agw.hyperlink import HyperLinkCtrl
 
-
-#----------------------------------------------------------------------
 
 class AboutDialog(wx.Dialog):
     """
@@ -106,8 +104,6 @@ class AboutDialog(wx.Dialog):
         CreditsDialog(self, self.info)
 
 
-#----------------------------------------------------------------------
-
 class CreditsDialog(wx.Dialog):
     def __init__(self, parent, info):
         wx.Dialog.__init__(self, parent, title=_("Credits"), size=(475, 320),
@@ -144,8 +140,6 @@ class CreditsDialog(wx.Dialog):
         close.Bind(wx.EVT_BUTTON, lambda evt: self.Destroy())
 
 
-#----------------------------------------------------------------------
-
 class LicenseDialog(wx.Dialog):
     def __init__(self, parent, info):
         wx.Dialog.__init__(self, parent, title=_("License"), size=(500, 400),
@@ -173,7 +167,6 @@ class LicenseDialog(wx.Dialog):
 
         close.Bind(wx.EVT_BUTTON, lambda evt: self.Destroy())
 
-#----------------------------------------------------------------------
 
 def ShowAboutDialog(parent, info):
     if os.name == "nt":

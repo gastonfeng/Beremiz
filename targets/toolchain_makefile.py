@@ -22,18 +22,23 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import os, re, operator
-from util.ProcessLogger import ProcessLogger
+
+from __future__ import absolute_import
+import os
+import re
+import operator
 import hashlib
+from functools import reduce
+from util.ProcessLogger import ProcessLogger
 
-import time
 
-includes_re =  re.compile('\s*#include\s*["<]([^">]*)[">].*')
+includes_re = re.compile(r'\s*#include\s*["<]([^">]*)[">].*')
 
-class toolchain_makefile():
+
+class toolchain_makefile(object):
     def __init__(self, CTRInstance):
         self.CTRInstance = CTRInstance
-        self.md5key = None 
+        self.md5key = None
         self.buildpath = None
         self.SetBuildPath(self.CTRInstance._getBuildPath())
 
@@ -42,31 +47,31 @@ class toolchain_makefile():
             self.buildpath = buildpath
             self.md5key = None
 
-    def GetBinaryCode(self):
+    def GetBinaryPath(self):
         return None
 
     def _GetMD5FileName(self):
         return os.path.join(self.buildpath, "lastbuildPLC.md5")
 
-    def ResetBinaryCodeMD5(self):
+    def ResetBinaryMD5(self):
         self.md5key = None
         try:
             os.remove(self._GetMD5FileName())
-        except Exception, e:
+        except Exception:
             pass
 
-    def GetBinaryCodeMD5(self):
+    def GetBinaryMD5(self):
         if self.md5key is not None:
             return self.md5key
         else:
             try:
                 return open(self._GetMD5FileName(), "r").read()
-            except IOError, e:
+            except IOError:
                 return None
 
     def concat_deps(self, bn):
         # read source
-        src = open(os.path.join(self.buildpath, bn),"r").read()
+        src = open(os.path.join(self.buildpath, bn), "r").read()
         # update direct dependencies
         deps = []
         for l in src.splitlines():
@@ -74,17 +79,17 @@ class toolchain_makefile():
             if res is not None:
                 depfn = res.groups()[0]
                 if os.path.exists(os.path.join(self.buildpath, depfn)):
-                    #print bn + " depends on "+depfn
+                    # print bn + " depends on "+depfn
                     deps.append(depfn)
         # recurse through deps
         # TODO detect cicular deps.
         return reduce(operator.concat, map(self.concat_deps, deps), src)
 
     def build(self):
-        srcfiles= []
+        srcfiles = []
         cflags = []
-        wholesrcdata = "" 
-        for Location, CFilesAndCFLAGS, DoCalls in self.CTRInstance.LocationCFilesAndCFLAGS:
+        wholesrcdata = ""
+        for _Location, CFilesAndCFLAGS, _DoCalls in self.CTRInstance.LocationCFilesAndCFLAGS:
             # Get CFiles list to give it to makefile
             for CFile, CFLAGS in CFilesAndCFLAGS:
                 CFileName = os.path.basename(CFile)
@@ -92,7 +97,7 @@ class toolchain_makefile():
                 srcfiles.append(CFileName)
                 if CFLAGS not in cflags:
                     cflags.append(CFLAGS)
-                        
+
         oldmd5 = self.md5key
         self.md5key = hashlib.md5(wholesrcdata).hexdigest()
 
@@ -101,28 +106,26 @@ class toolchain_makefile():
         f.write(self.md5key)
         f.close()
 
-        if oldmd5 != self.md5key :
+        if oldmd5 != self.md5key:
             target = self.CTRInstance.GetTarget().getcontent()
             beremizcommand = {"src": ' '.join(srcfiles),
                               "cflags": ' '.join(cflags),
                               "md5": self.md5key,
-                              "buildpath": self.buildpath
-                             }
-            
-            # clean sequence of multiple whitespaces 
-            cmd = re.sub(r"[ ]+", " ", target.getCommand())
+                              "buildpath": self.buildpath}
 
-            command = [ token % beremizcommand for token in cmd.split(' ')]
+            # clean sequence of multiple whitespaces
+            cmd = re.sub(r"[ ]+", " ", target.getCommand().strip())
+
+            command = [token % beremizcommand for token in cmd.split(' ')]
 
             # Call Makefile to build PLC code and link it with target specific code
-            status, result, err_result = ProcessLogger(self.CTRInstance.logger,
-                                                       command).spin()
-            if status :
+            status, _result, _err_result = ProcessLogger(self.CTRInstance.logger,
+                                                         command).spin()
+            if status:
                 self.md5key = None
                 self.CTRInstance.logger.write_error(_("C compilation failed.\n"))
                 return False
             return True
-        else :
+        else:
             self.CTRInstance.logger.write(_("Source didn't change, no build.\n"))
             return True
-

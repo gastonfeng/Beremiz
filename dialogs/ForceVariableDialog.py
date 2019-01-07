@@ -21,37 +21,44 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+
+from __future__ import absolute_import
 import re
 import datetime
+from builtins import str as text
 
 import wx
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 #                                Helpers
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
-LOCATIONDATATYPES = {"X" : ["BOOL"],
-                     "B" : ["SINT", "USINT", "BYTE", "STRING"],
-                     "W" : ["INT", "UINT", "WORD", "WSTRING"],
-                     "D" : ["DINT", "UDINT", "REAL", "DWORD"],
-                     "L" : ["LINT", "ULINT", "LREAL", "LWORD"]} 
+LOCATIONDATATYPES = {"X": ["BOOL"],
+                     "B": ["SINT", "USINT", "BYTE", "STRING"],
+                     "W": ["INT", "UINT", "WORD", "WSTRING"],
+                     "D": ["DINT", "UDINT", "REAL", "DWORD"],
+                     "L": ["LINT", "ULINT", "LREAL", "LWORD"]}
+
 
 def gen_get_function(f):
     def get_function(v):
         try:
             return f(v)
-        except:
+        except Exception:
             return None
     return get_function
 
+
 def gen_get_string(delimiter):
     STRING_MODEL = re.compile("%(delimiter)s([^%(delimiter)s]*)%(delimiter)s$" % {"delimiter": delimiter})
+
     def get_string(v):
         result = STRING_MODEL.match(v)
         if result is not None:
             return result.group(1)
         return None
     return get_string
+
 
 getinteger = gen_get_function(int)
 getfloat = gen_get_function(float)
@@ -63,12 +70,13 @@ MINUTE = 60 * SECOND
 HOUR = 60 * MINUTE
 DAY = 24 * HOUR
 
-IEC_TIME_MODEL = re.compile("(?:(?:T|TIME)#)?(-)?(?:(%(float)s)D_?)?(?:(%(float)s)H_?)?(?:(%(float)s)M(?!S)_?)?(?:(%(float)s)S_?)?(?:(%(float)s)MS)?$" % {"float": "[0-9]+(?:\.[0-9]+)?"})
-IEC_DATE_MODEL = re.compile("(?:(?:D|DATE)#)?([0-9]{4})-([0-9]{2})-([0-9]{2})$")
-IEC_DATETIME_MODEL = re.compile("(?:(?:DT|DATE_AND_TIME)#)?([0-9]{4})-([0-9]{2})-([0-9]{2})-([0-9]{2}):([0-9]{2}):([0-9]{2}(?:\.[0-9]+)?)$")
-IEC_TIMEOFDAY_MODEL = re.compile("(?:(?:TOD|TIME_OF_DAY)#)?([0-9]{2}):([0-9]{2}):([0-9]{2}(?:\.[0-9]+)?)$")
+IEC_TIME_MODEL = re.compile(r"(?:(?:T|TIME)#)?(-)?(?:(%(float)s)D_?)?(?:(%(float)s)H_?)?(?:(%(float)s)M(?!S)_?)?(?:(%(float)s)S_?)?(?:(%(float)s)MS)?$" % {"float": r"[0-9]+(?:\.[0-9]+)?"})
+IEC_DATE_MODEL = re.compile(r"(?:(?:D|DATE)#)?([0-9]{4})-([0-9]{2})-([0-9]{2})$")
+IEC_DATETIME_MODEL = re.compile(r"(?:(?:DT|DATE_AND_TIME)#)?([0-9]{4})-([0-9]{2})-([0-9]{2})-([0-9]{2}):([0-9]{2}):([0-9]{2}(?:\.[0-9]+)?)$")
+IEC_TIMEOFDAY_MODEL = re.compile(r"(?:(?:TOD|TIME_OF_DAY)#)?([0-9]{2}):([0-9]{2}):([0-9]{2}(?:\.[0-9]+)?)$")
 
-def gettime(v):    
+
+def gettime(v):
     result = IEC_TIME_MODEL.match(v.upper())
     if result is not None:
         negative, days, hours, minutes, seconds, milliseconds = result.groups()
@@ -87,9 +95,10 @@ def gettime(v):
         if negative is not None:
             microseconds = -microseconds
         return datetime.timedelta(microseconds=microseconds)
-    
-    else: 
+
+    else:
         return None
+
 
 def getdate(v):
     result = IEC_DATE_MODEL.match(v.upper())
@@ -97,12 +106,13 @@ def getdate(v):
         year, month, day = result.groups()
         try:
             date = datetime.datetime(int(year), int(month), int(day))
-        except ValueError, e:
+        except ValueError:
             return None
         base_date = datetime.datetime(1970, 1, 1)
         return date - base_date
-    else: 
+    else:
         return None
+
 
 def getdatetime(v):
     result = IEC_DATETIME_MODEL.match(v.upper())
@@ -110,12 +120,13 @@ def getdatetime(v):
         year, month, day, hours, minutes, seconds = result.groups()
         try:
             date = datetime.datetime(int(year), int(month), int(day), int(hours), int(minutes), int(float(seconds)), int((float(seconds) * SECOND) % SECOND))
-        except ValueError, e:
+        except ValueError:
             return None
         base_date = datetime.datetime(1970, 1, 1)
         return date - base_date
-    else: 
+    else:
         return None
+
 
 def gettimeofday(v):
     result = IEC_TIMEOFDAY_MODEL.match(v.upper())
@@ -129,6 +140,7 @@ def gettimeofday(v):
         return datetime.timedelta(microseconds=microseconds)
     else:
         return None
+
 
 GetTypeValue = {"BOOL": lambda x: {"TRUE": True, "FALSE": False, "0": False, "1": True}.get(x.upper(), None),
                 "SINT": getinteger,
@@ -152,31 +164,54 @@ GetTypeValue = {"BOOL": lambda x: {"TRUE": True, "FALSE": False, "0": False, "1"
                 "DT": getdatetime,
                 "TOD": gettimeofday}
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 #                            Force Variable Dialog
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
+
 
 class ForceVariableDialog(wx.TextEntryDialog):
 
     def __init__(self, parent, iec_type, defaultValue=""):
-        wx.TextEntryDialog.__init__(self, parent, message = _("Forcing Variable Value"), 
-                caption = _("Please enter value for a \"%s\" variable:") % iec_type, defaultValue = defaultValue, 
-                style = wx.OK|wx.CANCEL|wx.CENTRE, pos = wx.DefaultPosition)
-        
-        self.IEC_Type = iec_type 
-        
-        self.Bind(wx.EVT_BUTTON, self.OnOK, 
-              self.GetSizer().GetItem(2).GetSizer().GetItem(1).GetSizer().GetAffirmativeButton())
-        
+        wx.TextEntryDialog.__init__(
+            self, parent,
+            message=_("Forcing Variable Value"),
+            caption=_("Please enter value for a \"%s\" variable:") % iec_type,
+            defaultValue=defaultValue,
+            style=wx.OK | wx.CANCEL | wx.CENTRE, pos=wx.DefaultPosition)
+
+        self.IEC_Type = iec_type
+
+        self.Bind(wx.EVT_BUTTON, self.OnOK,
+                  self.GetSizer().GetItem(2).GetSizer().GetItem(1).
+                  GetSizer().GetAffirmativeButton())
+        self.ValueTextCtrl = self.GetSizer().GetItem(1).GetWindow()
+        if self.IEC_Type == "BOOL":
+            self.ToggleButton = wx.ToggleButton(self, label=_("Toggle value"))
+            value = GetTypeValue[self.IEC_Type](defaultValue)
+            if value is not None:
+                self.ToggleButton.SetValue(value)
+
+            border = self.GetSizer().GetItem(1).GetBorder()
+            self.GetSizer().Insert(before=2, item=self.ToggleButton,
+                                   border=border,
+                                   flag=wx.LEFT | wx.RIGHT | wx.EXPAND)
+            self.Bind(wx.EVT_TOGGLEBUTTON, self.ToggleBoolValue, self.ToggleButton)
+
+        self.Fit()
+
+    def ToggleBoolValue(self, event):
+        value = self.ToggleButton.GetValue()
+        self.ValueTextCtrl.SetValue(text(value))
+
     def OnOK(self, event):
         message = None
-        value = self.GetSizer().GetItem(1).GetWindow().GetValue()
+        value = self.ValueTextCtrl.GetValue()
         if value == "":
             message = _("You must type a value!")
         elif GetTypeValue[self.IEC_Type](value) is None:
-            message = _("Invalid value \"{a1}\" for \"{a2}\" variable!").format(a1 = value, a2 = self.IEC_Type)
+            message = _("Invalid value \"{a1}\" for \"{a2}\" variable!").format(a1=value, a2=self.IEC_Type)
         if message is not None:
-            dialog = wx.MessageDialog(self, message, _("Error"), wx.OK|wx.ICON_ERROR)
+            dialog = wx.MessageDialog(self, message, _("Error"), wx.OK | wx.ICON_ERROR)
             dialog.ShowModal()
             dialog.Destroy()
         else:

@@ -5,6 +5,7 @@
 # programming IEC 61131-3 automates supporting plcopen standard and CanFestival.
 #
 # Copyright (C) 2007: Edouard TISSERANT and Laurent BESSARD
+# Copyright (C) 2017: Andrey Skvortsov
 #
 # See COPYING file for copyrights details.
 #
@@ -22,18 +23,21 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+
+from __future__ import absolute_import
 import os
 from POULibrary import POULibrary
-from PythonFileCTNMixin import PythonFileCTNMixin
+from py_ext.PythonFileCTNMixin import PythonFileCTNMixin
+import util.paths as paths
+
 
 class PythonLibrary(POULibrary):
     def GetLibraryPath(self):
-        return os.path.join(os.path.split(__file__)[0], "pous.xml") 
+        return paths.AbsNeighbourFile(__file__, "pous.xml")
 
     def Generate_C(self, buildpath, varlist, IECCFLAGS):
-        
-        plc_python_filepath = os.path.join(
-            os.path.split(__file__)[0], "plc_python.c")
+
+        plc_python_filepath = paths.AbsNeighbourFile(__file__, "plc_python.c")
         plc_python_file = open(plc_python_filepath, 'r')
         plc_python_code = plc_python_file.read()
         plc_python_file.close()
@@ -43,21 +47,20 @@ class PythonLibrary(POULibrary):
                                                       "PYTHON_POLL"]:
                 python_eval_fb_list.append(v)
         python_eval_fb_count = max(1, len(python_eval_fb_list))
-        
+
         # prepare python code
         plc_python_code = plc_python_code % {
-            "python_eval_fb_count": python_eval_fb_count }
-        
+            "python_eval_fb_count": python_eval_fb_count}
+
         Gen_Pythonfile_path = os.path.join(buildpath, "py_ext.c")
-        pythonfile = open(Gen_Pythonfile_path,'w')
+        pythonfile = open(Gen_Pythonfile_path, 'w')
         pythonfile.write(plc_python_code)
         pythonfile.close()
-        
+
         return (["py_ext"], [(Gen_Pythonfile_path, IECCFLAGS)], True), ""
 
+
 class PythonFile(PythonFileCTNMixin):
-    
+
     def GetIconName(self):
         return "Pyfile"
-    
-

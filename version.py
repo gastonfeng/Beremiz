@@ -23,32 +23,53 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 
-import subprocess, os
+from __future__ import absolute_import
+from __future__ import unicode_literals
+
+import subprocess
+import os
+
+import util.paths as paths
+
+
+def GetCommunityHelpMsg():
+    return _(
+        "The best place to ask questions about Beremiz/PLCOpenEditor\n"
+        "is project's mailing list: beremiz-devel@lists.sourceforge.net\n"
+        "\n"
+        "This is the main community support channel.\n"
+        "For posting it is required to be subscribed to the mailing list.\n"
+        "\n"
+        "You can subscribe to the list here:\n"
+        "https://lists.sourceforge.net/lists/listinfo/beremiz-devel"
+    )
+
 
 def GetAppRevision():
     rev = None
-    app_dir=os.path.dirname(os.path.realpath(__file__))    
+    app_dir = paths.AbsDir(__file__)
     try:
         pipe = subprocess.Popen(
             ["hg", "id", "-i"],
-            stdout = subprocess.PIPE,
-            cwd = app_dir
+            stdout=subprocess.PIPE,
+            cwd=app_dir
         )
         rev = pipe.communicate()[0]
         if pipe.returncode != 0:
             rev = None
-    except:
+    except Exception:
         pass
-    
+
     # if this is not mercurial repository
     # try to read revision from file
     if rev is None:
         try:
-            f = open(os.path.join(app_dir,"revision"))
+            f = open(os.path.join(app_dir, "revision"))
             rev = f.readline()
-        except:
+        except Exception:
             pass
     return rev
+
 
 def GetAboutDialogInfo():
     import wx
@@ -56,57 +77,132 @@ def GetAboutDialogInfo():
 
     info.Name = "Beremiz"
     info.Version = app_version
-    
-    info.Copyright  = "(C) 2016 Andrey Skvortsov\n"
-    info.Copyright += "(C) 2008-2015 Eduard Tisserant\n"
+
+    info.Copyright = ""
+    info.Copyright += "(C) 2016-2018 Andrey Skvortsov\n"
+    info.Copyright += "(C) 2008-2018 Eduard Tisserant\n"
     info.Copyright += "(C) 2008-2015 Laurent Bessard"
 
     info.WebSite = ("http://beremiz.org", "beremiz.org")
-    
+
     info.Description = _("Open Source framework for automation, "
-                             "implemented IEC 61131 IDE with constantly growing set of extensions "
-                             "and flexible PLC runtime.")
-    
-    info.Developers = ("Andrey Skvortsov <andrej.skvortzov@gmail.com>",
-		       "Sergey Surkov <surkov.sv@summatechnology.ru>",
-		       "Edouard Tisserant <edouard.tisserant@gmail.com>",
-		       "Laurent Bessard <laurent.bessard@gmail.com>")
+                         "implemented IEC 61131 IDE with constantly growing set of extensions "
+                         "and flexible PLC runtime.")
 
+    info.Developers = (
+        "Andrey Skvortsov <andrej.skvortzov@gmail.com>",
+        "Sergey Surkov <surkov.sv@summatechnology.ru>",
+        "Edouard Tisserant <edouard.tisserant@gmail.com>",
+        "Laurent Bessard <laurent.bessard@gmail.com>")
 
-    info.License = ('\n This program is free software; you can redistribute it and/or\n'
-    ' modify it under the terms of the GNU General Public License\n'
-    ' as published by the Free Software Foundation; either version 2\n'
-    ' of the License, or (at your option) any later version.\n'
-    '\n'
-    ' This program is distributed in the hope that it will be useful,\n'
-    ' but WITHOUT ANY WARRANTY; without even the implied warranty of\n'
-    ' MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n'
-    ' GNU General Public License below for more details.\n'
-    '\n'
-    '\n'
-    '\n'
-    '')
+    info.License = (
+        '\n This program is free software; you can redistribute it and/or\n'
+        ' modify it under the terms of the GNU General Public License\n'
+        ' as published by the Free Software Foundation; either version 2\n'
+        ' of the License, or (at your option) any later version.\n'
+        '\n'
+        ' This program is distributed in the hope that it will be useful,\n'
+        ' but WITHOUT ANY WARRANTY; without even the implied warranty of\n'
+        ' MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the\n'
+        ' GNU General Public License below for more details.\n'
+        '\n'
+        '\n'
+        '\n'
+        ''
+    )
 
     # read license file
-    path=os.path.join(os.path.dirname(os.path.abspath(__file__)))
-    license_path = os.path.join(path, u"COPYING")
-    license=''
+    path = paths.AbsDir(__file__)
+    license_path = os.path.join(path, "COPYING")
     if os.path.exists(license_path):
         with open(license_path) as f:
             info.License += f.read()
 
     info.Icon = wx.Icon(os.path.join(path, "images", "about_brz_logo.png"), wx.BITMAP_TYPE_PNG)
 
-    info.Translators = ("Russian\t- Andrey Skvortsov <andrej.skvortzov@gmail.com>",
-	                "Korean\t- Reinhard Lee <lij3105@gmail.com>",
-	                "German\t- Mark Muzenhardt <mark.muzenhardt@gmail.com>",
-	                "French\t- Laurent Bessard <laurent.bessard@gmail.com>")
+    info.Translators = (
+        "Bengali (Bangladesh)",
+        "  Adhir Dutta <likhon52@gmail.com>, 2017",
+        "",
+
+        "Chinese",
+        "  Frank Guan <gpfrank@163.com>, 2018",
+        "  Tango Wu <wuyangtang@live.com>, 2017",
+        "  Yiwei Yan <523136664@qq.com>, 2018",
+        "",
+
+        "Dutch (Netherlands)",
+        "  Jordy van der Heijden <jordyvanderheijden@gmail.com>, 2018",
+        "",
+
+        "French",
+        "  Edouard Tisserant <edouard.tisserant@gmail.com>, 2018",
+        "  Fabien Marteau <mail@fabienm.eu>, 2017",
+        "  Laurent Bessard <laurent.bessard@gmail.com>, 2008",
+        "",
+
+        "German",
+        "  Andrey Skvortsov <andrej.skvortzov@gmail.com>, 2017",
+        "  Hendrik Knackstedt <h.knackstedt@stud.uni-hannover.de>, 2017 ",
+        "  Mark Muzenhardt <mark.muzenhardt@gmail.com>, 2012",
+        "",
+
+        "Hungarian",
+        "  Krisztián Veress <krive001@gmail.com>, 2018",
+        "  Gábor Véninger <veninger.gabor@gmail.com>, 2017",
+        "",
+
+        "Italian",
+        "  Luca Magnabosco <magnabosco.luca@gmail.com>, 2017",
+        "  Manuele Conti <manuele.conti@sirius-es.it>, 2017",
+        "",
+
+        "Korean",
+        "  Ikhwan Kim <duo821228@gmail.com>, 2018",
+        "  Reinhard Lee <lij3105@gmail.com>, 2012",
+        "",
+
+        "Portuguese",
+        "  Pedro Coimbra <pcoimbra310@gmail.com>, 2017",
+        "",
+
+        "Portuguese (Brazil)",
+        "  Rodrigo Rolle <ro_pita@hotmail.com>, 2018",
+        "  Thiago Alves <thiagoralves@gmail.com>, 2017",
+        "",
+
+        "Romanian",
+        "  Emil Saracutu <emil_saracutu@yahoo.com>, 2018",
+        "",
+
+        "Russian",
+        "  Andrey Skvortsov <andrej.skvortzov@gmail.com>, 2018",
+        "  Sergey Surkov <surkov.sv@summatechnology.ru>, 2018",
+        "  zx_alexis <zxalexis@gmail.com>, 2017",
+        "",
+
+        "Slovenian",
+        "  Janez Pregelj <janezpregelj@gmail.com>, 2018",
+        "  Andraz Gregorcic <andraz.gregorcic@smarteh.si>, 2017",
+        "",
+
+        "Spanish",
+        "  Carlos Guilarte <guilartec@gmail.com>, 2018",
+        "  Yegor Yefremov <yegorslists@googlemail.com>, 2018",
+        "  Jorge Rojas, 2018",
+        "  Marcial González de Armas <mgacod@gmail.com>, 2017",
+        "  Nelson Mambre <nmambre@gmail.com>, 2017",
+        "",
+
+        "Turkish",
+        "  Ibrahim Kilicarslan <ibrahimhalilkilicarslan@outlook.com>, 2018",
+        "",
+
+    )
     return info
 
-app_version =  "1.2"
+
+app_version = "1.2"
 rev = GetAppRevision()
 if rev is not None:
     app_version = app_version + "-" + rev.rstrip()
-    
-        
-

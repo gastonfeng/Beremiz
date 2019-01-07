@@ -5,6 +5,7 @@
 # programming IEC 61131-3 automates supporting plcopen standard and CanFestival.
 #
 # Copyright (C) 2007: Edouard TISSERANT and Laurent BESSARD
+# Copyright (C) 2017: Andrey Skvortsov <andrej.skvortzov@gmail.com>
 #
 # See COPYING file for copyrights details.
 #
@@ -22,13 +23,16 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
+
+from __future__ import absolute_import
+from __future__ import division
 import re
 
 import wx
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 #                                  Helpers
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 
 MICROSECONDS = 0.001
 MILLISECONDS = 1
@@ -37,63 +41,64 @@ MINUTE = 60 * SECOND
 HOUR = 60 * MINUTE
 DAY = 24 * HOUR
 
-IEC_TIME_MODEL = re.compile("(?:T|TIME)#(-)?(?:(%(float)s)D_?)?(?:(%(float)s)H_?)?(?:(%(float)s)M(?!S)_?)?(?:(%(float)s)S_?)?(?:(%(float)s)MS)?$" % {"float": "[0-9]+(?:\.[0-9]+)?"})
+IEC_TIME_MODEL = re.compile(r"(?:T|TIME)#(-)?(?:(%(float)s)D_?)?(?:(%(float)s)H_?)?(?:(%(float)s)M(?!S)_?)?(?:(%(float)s)S_?)?(?:(%(float)s)MS)?$" % {"float": r"[0-9]+(?:\.[0-9]+)?"})
 
-CONTROLS = [
-    ("Days", _('Days:')),
-    ("Hours", _('Hours:')),
-    ("Minutes", _('Minutes:')),
-    ("Seconds", _('Seconds:')),
-    ("Milliseconds", _('Milliseconds:')),
-    ("Microseconds", _('Microseconds:')),
-]
 
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
 #                         Edit Duration Value Dialog
-#-------------------------------------------------------------------------------
+# -------------------------------------------------------------------------------
+
 
 class DurationEditorDialog(wx.Dialog):
 
     def __init__(self, parent):
-        wx.Dialog.__init__(self, parent, 
-              size=wx.Size(700, 200), title=_('Edit Duration'))
-        
+        wx.Dialog.__init__(self, parent, title=_('Edit Duration'))
+
+        CONTROLS = [
+            ("Days", _('Days:')),
+            ("Hours", _('Hours:')),
+            ("Minutes", _('Minutes:')),
+            ("Seconds", _('Seconds:')),
+            ("Milliseconds", _('Milliseconds:')),
+            ("Microseconds", _('Microseconds:')),
+        ]
+
         main_sizer = wx.FlexGridSizer(cols=1, hgap=0, rows=2, vgap=10)
         main_sizer.AddGrowableCol(0)
         main_sizer.AddGrowableRow(0)
-        
+
         controls_sizer = wx.FlexGridSizer(cols=len(CONTROLS), hgap=10, rows=2, vgap=10)
-        main_sizer.AddSizer(controls_sizer, border=20, 
-              flag=wx.TOP|wx.LEFT|wx.RIGHT|wx.GROW)
-        
+        main_sizer.AddSizer(controls_sizer, border=20,
+                            flag=wx.TOP | wx.LEFT | wx.RIGHT | wx.GROW)
+
         controls = []
         for i, (name, label) in enumerate(CONTROLS):
             controls_sizer.AddGrowableCol(i)
-            
+
             st = wx.StaticText(self, label=label)
             txtctrl = wx.TextCtrl(self, value='0', style=wx.TE_PROCESS_ENTER)
-            self.Bind(wx.EVT_TEXT_ENTER, 
-                      self.GetControlValueTestFunction(txtctrl), 
+            self.Bind(wx.EVT_TEXT_ENTER,
+                      self.GetControlValueTestFunction(txtctrl),
                       txtctrl)
             setattr(self, name, txtctrl)
-        
+
             controls.append((st, txtctrl))
-            
+
         for st, txtctrl in controls:
             controls_sizer.AddWindow(st, flag=wx.GROW)
-            
+
         for st, txtctrl in controls:
             controls_sizer.AddWindow(txtctrl, flag=wx.GROW)
-        
-        button_sizer = self.CreateButtonSizer(wx.OK|wx.CANCEL|wx.CENTRE)
+
+        button_sizer = self.CreateButtonSizer(wx.OK | wx.CANCEL | wx.CENTRE)
         self.Bind(wx.EVT_BUTTON, self.OnOK, button_sizer.GetAffirmativeButton())
-        main_sizer.AddSizer(button_sizer, border=20, 
-              flag=wx.ALIGN_RIGHT|wx.BOTTOM|wx.LEFT|wx.RIGHT)
-        
+        main_sizer.AddSizer(button_sizer, border=20,
+                            flag=wx.ALIGN_RIGHT | wx.BOTTOM | wx.LEFT | wx.RIGHT)
+
         self.SetSizer(main_sizer)
-        
+        self.Fit()
         self.Days.SetFocus()
-        
+
     def SetDuration(self, value):
         result = IEC_TIME_MODEL.match(value.upper())
         if result is not None:
@@ -112,16 +117,17 @@ class DurationEditorDialog(wx.Dialog):
             else:
                 self.Milliseconds.SetValue("0")
                 self.Microseconds.SetValue("0")
-        
+
     def GetControlValueTestFunction(self, control):
         def OnValueChanged(event):
             try:
-                value = float(control.GetValue())
-            except ValueError, e:
-                message = wx.MessageDialog(self, _("Invalid value!\nYou must fill a numeric value."), _("Error"), wx.OK|wx.ICON_ERROR)
+                float(control.GetValue())
+            except ValueError:
+                message = wx.MessageDialog(self, _("Invalid value!\nYou must fill a numeric value."), _("Error"), wx.OK | wx.ICON_ERROR)
                 message.ShowModal()
                 message.Destroy()
             event.Skip()
+            self.OnCloseDialog()
         return OnValueChanged
 
     def GetDuration(self):
@@ -129,38 +135,42 @@ class DurationEditorDialog(wx.Dialog):
         for control, factor in [(self.Days, DAY), (self.Hours, HOUR),
                                 (self.Minutes, MINUTE), (self.Seconds, SECOND),
                                 (self.Milliseconds, MILLISECONDS), (self.Microseconds, MICROSECONDS)]:
-            
+
             milliseconds += float(control.GetValue()) * factor
-        
+
         not_null = False
         duration = "T#"
-        for value, format in [(int(milliseconds) / DAY, "%dd"),
-                            ((int(milliseconds) % DAY) / HOUR, "%dh"),
-                            ((int(milliseconds) % HOUR) / MINUTE, "%dm"),
-                            ((int(milliseconds) % MINUTE) / SECOND, "%ds")]:
-            
+        for value, format in [((int(milliseconds) // DAY),             "%dd"),
+                              ((int(milliseconds) % DAY) // HOUR,      "%dh"),
+                              ((int(milliseconds) % HOUR) // MINUTE,   "%dm"),
+                              ((int(milliseconds) % MINUTE) // SECOND, "%ds")]:
+
             if value > 0 or not_null:
                 duration += format % value
                 not_null = True
-        
-        duration += "%gms" % (milliseconds % SECOND)
+
+        duration += ("%f" % (milliseconds % SECOND)).rstrip("0").rstrip(".") + "ms"
         return duration
-    
+
     def OnOK(self, event):
+        self.OnCloseDialog()
+
+    def OnCloseDialog(self):
         errors = []
-        for control, name in [(self.Days, _("days")), (self.Hours, _("hours")), 
+        for control, name in [(self.Days, _("days")), (self.Hours, _("hours")),
                               (self.Minutes, _("minutes")), (self.Seconds, _("seconds")),
-                              (self.Milliseconds, _("milliseconds"))]:
+                              (self.Milliseconds, _("milliseconds")),
+                              (self.Microseconds, _("microseconds"))]:
             try:
-                value = float(control.GetValue())
-            except ValueError, e:
+                float(control.GetValue())
+            except ValueError:
                 errors.append(name)
         if len(errors) > 0:
             if len(errors) == 1:
                 message = _("Field %s hasn't a valid value!") % errors[0]
             else:
                 message = _("Fields %s haven't a valid value!") % ",".join(errors)
-            dialog = wx.MessageDialog(self, message, _("Error"), wx.OK|wx.ICON_ERROR)
+            dialog = wx.MessageDialog(self, message, _("Error"), wx.OK | wx.ICON_ERROR)
             dialog.ShowModal()
             dialog.Destroy()
         else:

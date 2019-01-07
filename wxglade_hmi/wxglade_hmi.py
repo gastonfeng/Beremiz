@@ -5,6 +5,7 @@
 # programming IEC 61131-3 automates supporting plcopen standard and CanFestival.
 #
 # Copyright (C) 2007: Edouard TISSERANT and Laurent BESSARD
+# Copyright (C) 2017: Andrey Skvortsov
 #
 # See COPYING file for copyrights details.
 #
@@ -22,26 +23,35 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-import wx
-import os, sys, shutil
+
+from __future__ import absolute_import
+import os
+import sys
+import shutil
 from xml.dom import minidom
 
+import wx
+
+import util.paths as paths
 from py_ext import PythonFileCTNMixin
+
 
 class WxGladeHMI(PythonFileCTNMixin):
 
     ConfNodeMethods = [
-        {"bitmap" : "editWXGLADE",
-         "name" : _("WXGLADE GUI"),
-         "tooltip" : _("Edit a WxWidgets GUI with WXGlade"),
-         "method" : "_editWXGLADE"},
+        {
+            "bitmap":    "editWXGLADE",
+            "name":    _("WXGLADE GUI"),
+            "tooltip": _("Edit a WxWidgets GUI with WXGlade"),
+            "method":   "_editWXGLADE"
+        },
     ]
 
     def GetIconName(self):
         return "wxGlade"
 
     def ConfNodePath(self):
-        return os.path.join(os.path.dirname(__file__))
+        return paths.AbsDir(__file__)
 
     def _getWXGLADEpath(self, project_path=None):
         if project_path is None:
@@ -49,14 +59,29 @@ class WxGladeHMI(PythonFileCTNMixin):
         # define name for wxGlade gui file
         return os.path.join(project_path, "hmi.wxg")
 
+    def GetWxGladePath(self):
+        path = None
+        try:
+            from wxglade import __file__ as fileName
+            path = os.path.dirname(fileName)
+            return path
+        except ImportError:
+            pass
+
+        defLibDir = "/usr/share/wxglade"
+        if os.path.isdir(defLibDir):
+            path = defLibDir
+
+        return path
+
     def launch_wxglade(self, options, wait=False):
-        from wxglade import __file__ as fileName
-        path = os.path.dirname(fileName)
+        path = self.GetWxGladePath()
         glade = os.path.join(path, 'wxglade.py')
         if wx.Platform == '__WXMSW__':
-            glade = "\"%s\""%glade
-        mode = {False:os.P_NOWAIT, True:os.P_WAIT}[wait]
-        os.spawnv(mode, sys.executable, ["\"%s\""%sys.executable] + [glade] + options)
+            glade = "\"%s\"" % glade
+        mode = {False: os.P_NOWAIT, True: os.P_WAIT}[wait]
+        os.spawnv(mode, sys.executable,
+                  ["\"%s\"" % sys.executable] + [glade] + options)
 
     def OnCTNSave(self, from_project_path=None):
         if from_project_path is not None:
@@ -65,46 +90,54 @@ class WxGladeHMI(PythonFileCTNMixin):
         return PythonFileCTNMixin.OnCTNSave(self, from_project_path)
 
     def CTNGenerate_C(self, buildpath, locations):
-        
-        hmi_frames = []
-        
-        wxgfile_path=self._getWXGLADEpath()
+
+        # list containing description of all objects declared in wxglade
+        hmi_objects = []
+        # list containing only description of the main frame object
+        main_frames = []
+
+        wxgfile_path = self._getWXGLADEpath()
         if os.path.exists(wxgfile_path):
             wxgfile = open(wxgfile_path, 'r')
             wxgtree = minidom.parse(wxgfile)
             wxgfile.close()
-            
+
             for node in wxgtree.childNodes[1].childNodes:
                 if node.nodeType == wxgtree.ELEMENT_NODE:
-                    hmi_frames.append({
-                        "name" : node.getAttribute("name"),
-                        "class" : node.getAttribute("class"),
-                        "handlers" : [
-                            hnode.firstChild.data for hnode in 
-                            node.getElementsByTagName("handler")]})
-                    
-            hmipyfile_path=os.path.join(self._getBuildPath(), "hmi.py")
+                    name = node.getAttribute("name")
+                    wxglade_object_desc = {
+                        "name": name,
+                        "class": node.getAttribute("class"),
+                        "handlers": [
+                            hnode.firstChild.data for hnode in
+                            node.getElementsByTagName("handler")]}
+
+                    hmi_objects.append(wxglade_object_desc)
+                    if name == self.CTNName():
+                        main_frames.append(wxglade_object_desc)
+
+            hmipyfile_path = os.path.join(self._getBuildPath(), "hmi.py")
             if wx.Platform == '__WXMSW__':
-                wxgfile_path = "\"%s\""%wxgfile_path
-                wxghmipyfile_path = "\"%s\""%hmipyfile_path
+                wxgfile_path = "\"%s\"" % wxgfile_path
+                wxghmipyfile_path = "\"%s\"" % hmipyfile_path
             else:
                 wxghmipyfile_path = hmipyfile_path
-            self.launch_wxglade(['-o', wxghmipyfile_path, '-g', 'python', wxgfile_path], wait=True)
-            
+            self.launch_wxglade(
+                ['-o', wxghmipyfile_path, '-g', 'python', wxgfile_path], wait=True)
+
             hmipyfile = open(hmipyfile_path, 'r')
             define_hmi = hmipyfile.read().decode('utf-8')
             hmipyfile.close()
-        
+
         else:
             define_hmi = ""
-        
-        declare_hmi = "\n".join(["%(name)s = None\n" % x + 
-                          "\n".join(["%(class)s.%(h)s = %(h)s"%
-                            dict(x,h=h) for h in x['handlers']])
-                                for x in hmi_frames])
-        global_hmi = ("global %s\n"%",".join(
-                         [x["name"] for x in hmi_frames]) 
-                      if len(hmi_frames) > 0 else "")
+
+        declare_hmi = "\n".join(["%(name)s = None\n" % x for x in main_frames])
+        declare_hmi += "\n".join(["\n".join(["%(class)s.%(h)s = %(h)s" %
+                                             dict(x, h=h) for h in x['handlers']])
+                                  for x in hmi_objects])
+        global_hmi = ("global %s\n" % ",".join(
+            [x["name"] for x in main_frames]) if len(main_frames) > 0 else "")
         init_hmi = "\n".join(["""\
 def OnCloseFrame(evt):
     wx.MessageBox(_("Please stop PLC to close"))
@@ -112,20 +145,25 @@ def OnCloseFrame(evt):
 %(name)s = %(class)s(None)
 %(name)s.Bind(wx.EVT_CLOSE, OnCloseFrame)
 %(name)s.Show()
-""" % x for x in hmi_frames])
+""" % x for x in main_frames])
         cleanup_hmi = "\n".join(
-            ["if %(name)s is not None: %(name)s.Destroy()" % x 
-                for x in hmi_frames])
-        
+            ["if %(name)s is not None: %(name)s.Destroy()" % x
+             for x in main_frames])
+
         self.PreSectionsTexts = {
-            "globals":define_hmi,
-            "start":global_hmi,
-            "stop":global_hmi + cleanup_hmi
+            "globals": define_hmi,
+            "start":   global_hmi,
+            "stop":    global_hmi + cleanup_hmi
         }
         self.PostSectionsTexts = {
-            "globals":declare_hmi,
-            "start":init_hmi,
+            "globals": declare_hmi,
+            "start":   init_hmi,
         }
+
+        if len(main_frames) == 0 and \
+           len(getattr(self.CodeFile, "start").getanyText().strip()) == 0:
+            self.GetCTRoot().logger.write_warning(
+                _("Warning: WxGlade HMI has no object with name identical to extension name, and no python code is provided in start section to create object.\n"))
 
         return PythonFileCTNMixin.CTNGenerate_C(self, buildpath, locations)
 
@@ -136,13 +174,13 @@ def OnCloseFrame(evt):
             dialog = wx.MessageDialog(self.GetCTRoot().AppFrame,
                                       _("You don't have write permissions.\nOpen wxGlade anyway ?"),
                                       _("Open wxGlade"),
-                                      wx.YES_NO|wx.ICON_QUESTION)
+                                      wx.YES_NO | wx.ICON_QUESTION)
             open_wxglade = dialog.ShowModal() == wx.ID_YES
             dialog.Destroy()
         if open_wxglade:
             if not os.path.exists(wxg_filename):
                 hmi_name = self.BaseParams.getName()
-                open(wxg_filename,"w").write("""<?xml version="1.0"?>
+                open(wxg_filename, "w").write("""<?xml version="1.0"?>
     <application path="" name="" class="" option="0" language="python" top_window="%(name)s" encoding="UTF-8" use_gettext="0" overwrite="0" use_new_namespace="1" for_version="2.8" is_template="0">
         <object class="%(class)s" name="%(name)s" base="EditFrame">
             <style>wxDEFAULT_FRAME_STYLE</style>
@@ -155,6 +193,5 @@ def OnCloseFrame(evt):
     </application>
     """ % {"name": hmi_name, "class": "Class_%s" % hmi_name})
             if wx.Platform == '__WXMSW__':
-                wxg_filename = "\"%s\""%wxg_filename
+                wxg_filename = "\"%s\"" % wxg_filename
             self.launch_wxglade([wxg_filename])
-
