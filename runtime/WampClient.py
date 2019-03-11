@@ -33,13 +33,13 @@ from autobahn.twisted import wamp
 from autobahn.twisted.websocket import WampWebSocketClientFactory, connectWS
 from autobahn.wamp import types, auth
 from autobahn.wamp.serializer import MsgPackSerializer
-from twisted.internet.defer import inlineCallbacks
 from twisted.internet.protocol import ReconnectingClientFactory
 from twisted.python.components import registerAdapter
 
 from formless import annotate, webform
 import formless
 from nevow import tags, url, static
+from runtime import GetPLCObjectSingleton
 
 mandatoryConfigItems = ["ID", "active", "realm", "url"]
 
@@ -56,6 +56,10 @@ ExposedCalls = [
     ("StartPLC", {}),
     ("StopPLC", {}),
     ("GetPLCstatus", {}),
+    ("GetPLCID", {}),
+    ("SeedBlob", {}),
+    ("AppendChunkToBlob", {}),
+    ("PurgeBlobs", {}),
     ("NewPLC", {}),
     ("MatchMD5", {}),
     ("SetTraceVariablesList", {}),
@@ -88,7 +92,7 @@ lastKnownConfig = None
 def GetCallee(name):
     """ Get Callee or Subscriber corresponding to '.' spearated object path """
     names = name.split('.')
-    obj = _PySrv.plcobj
+    obj = GetPLCObjectSingleton()
     while names:
         obj = getattr(obj, names.pop(0))
     return obj
@@ -116,7 +120,6 @@ class WampSession(wamp.ApplicationSession):
             raise Exception(
                 "don't know how to handle authmethod {}".format(challenge.method))
 
-    @inlineCallbacks
     def onJoin(self, details):
         global _WampSession
         _WampSession = self
@@ -129,13 +132,13 @@ class WampSession(wamp.ApplicationSession):
                 registerOptions = None
                 print(_("TypeError register option: {}".format(e)))
 
-            yield self.register(GetCallee(name), u'.'.join((ID, name)), registerOptions)
+            self.register(GetCallee(name), u'.'.join((ID, name)), registerOptions)
 
         for name in SubscribedEvents:
-            yield self.subscribe(GetCallee(name), text(name))
+            self.subscribe(GetCallee(name), unicode(name))
 
         for func in DoOnJoin:
-            yield func(self)
+            func(self)
 
         print(_('WAMP session joined (%s) by:' % time.ctime()), ID)
 
@@ -145,6 +148,10 @@ class WampSession(wamp.ApplicationSession):
         _WampSession = None
         _transportFactory = None
         print(_('WAMP session left'))
+
+    def publishWithOwnID(self, eventID, value):
+        ID = self.config.extra["ID"]
+        self.publish(unicode(ID+'.'+eventID), value)
 
 
 class ReconnectingWampWebSocketClientFactory(WampWebSocketClientFactory, ReconnectingClientFactory):
@@ -167,22 +174,16 @@ class ReconnectingWampWebSocketClientFactory(WampWebSocketClientFactory, Reconne
         return ReconnectingClientFactory.buildProtocol(self, addr)
 
     def clientConnectionFailed(self, connector, reason):
-        if self.continueTrying:
-            print(_("WAMP Client connection failed (%s) .. retrying ..") %
-                  time.ctime())
-            super(ReconnectingWampWebSocketClientFactory,
-                  self).clientConnectionFailed(connector, reason)
-        else:
-            del connector
+        print(_("WAMP Client connection failed (%s) .. retrying ..") %
+              time.ctime())
+        super(ReconnectingWampWebSocketClientFactory,
+              self).clientConnectionFailed(connector, reason)
 
     def clientConnectionLost(self, connector, reason):
-        if self.continueTrying:
-            print(_("WAMP Client connection lost (%s) .. retrying ..") %
-                  time.ctime())
-            super(ReconnectingWampWebSocketClientFactory,
-                  self).clientConnectionFailed(connector, reason)
-        else:
-            del connector
+        print(_("WAMP Client connection lost (%s) .. retrying ..") %
+              time.ctime())
+        super(ReconnectingWampWebSocketClientFactory,
+              self).clientConnectionFailed(connector, reason)
 
 
 def CheckConfiguration(WampClientConf):
@@ -226,12 +227,9 @@ def SetConfiguration(WampClientConf):
 
     with open(os.path.realpath(_WampConf), 'w') as f:
         json.dump(WampClientConf, f, sort_keys=True, indent=4)
+    StopReconnectWampClient()
     if 'active' in WampClientConf and WampClientConf['active']:
-        if _transportFactory and _WampSession:
-            StopReconnectWampClient()
         StartReconnectWampClient()
-    else:
-        StopReconnectWampClient()
 
     return WampClientConf
 
@@ -343,6 +341,16 @@ def SetServer(pysrv):
     _PySrv = pysrv
 
 
+def PublishEvent(eventID, value):
+    if getWampStatus() == "Attached":
+        _WampSession.publish(unicode(eventID), value)
+
+
+def PublishEventWithOwnID(eventID, value):
+    if getWampStatus() == "Attached":
+        _WampSession.publishWithOwnID(unicode(eventID), value)
+
+
 # WEB CONFIGURATION INTERFACE
 WAMP_SECRET_URL = "secret"
 webExposedConfigItems = ['active', 'url', 'ID']
@@ -428,7 +436,8 @@ def deliverWampSecret(ctx, segments):
 
 
 def RegisterWebSettings(NS):
-    NS.ConfigurableSettings.addExtension(
+
+    NS.ConfigurableSettings.addSettings(
         "wamp",
         _("Wamp Settings"),
         webFormInterface,

@@ -30,6 +30,7 @@ import platform as platform_module
 from zope.interface import implements
 from nevow import appserver, inevow, tags, loaders, athena, url, rend
 from nevow.page import renderer
+from nevow.static import File
 from formless import annotate
 from formless import webform
 from formless import configurable
@@ -77,10 +78,12 @@ class PLCStoppedHMI(PLCHMI):
 class MainPage(athena.LiveElement):
     jsClass = u"WebInterface.PLC"
     docFactory = loaders.stan(
-        tags.div(render=tags.directive('liveElement'))[
-            tags.div(id='content')[
-                tags.div(render=tags.directive('PLCElement'))]
-        ])
+        tags.invisible[
+            tags.div(render=tags.directive('liveElement'))[
+                tags.div(id='content')[
+                    tags.div(render=tags.directive('PLCElement'))]
+            ],
+            tags.a(href='settings')['Settings']])
 
     def __init__(self, *a, **kw):
         athena.LiveElement.__init__(self, *a, **kw)
@@ -135,11 +138,34 @@ class ConfigurableBindings(configurable.Configurable):
     def __init__(self):
         configurable.Configurable.__init__(self, None)
         self.bindingsNames = []
+        self.infostringcount = 0
 
     def getBindingNames(self, ctx):
         return self.bindingsNames
 
-    def addExtension(self, name, desc, fields, btnlabel, callback):
+    def addInfoString(self, label, value, name=None):
+        if isinstance(value, str):
+            def default(*k):
+                return value
+        else:
+            def default(*k):
+                return value()
+
+        if name is None:
+            name = "_infostring_" + str(self.infostringcount)
+            self.infostringcount = self.infostringcount + 1
+
+        def _bind(ctx):
+            return annotate.Property(
+                name,
+                annotate.String(
+                    label=label,
+                    default=default,
+                    immutable=True))
+        setattr(self, 'bind_' + name, _bind)
+        self.bindingsNames.append(name)
+
+    def addSettings(self, name, desc, fields, btnlabel, callback):
         def _bind(ctx):
             return annotate.MethodBinding(
                 'action_' + name,
@@ -192,25 +218,27 @@ class SettingsPage(rend.Page):
 
     # This makes webform_css url answer some default CSS
     child_webform_css = webform.defaultCSS
+    child_webinterface_css = File(paths.AbsNeighbourFile(__file__, 'webinterface.css'), 'text/css')
 
     implements(ISettings)
 
-    docFactory = loaders.stan([
-        tags.html[
-            tags.head[
-                tags.title[_("Beremiz Runtime Settings")],
-                tags.link(rel='stylesheet',
-                          type='text/css',
-                          href=url.here.child("webform_css"))
-            ],
-            tags.body[
-                tags.h1["Runtime settings:"],
-                webform.renderForms('staticSettings'),
-                tags.h2["Extensions settings:"],
-                webform.renderForms('dynamicSettings'),
-            ]
-        ]
-    ])
+    docFactory = loaders.stan([tags.html[
+        tags.head[
+            tags.title[_("Beremiz Runtime Settings")],
+            tags.link(rel='stylesheet',
+                      type='text/css',
+                      href=url.here.child("webform_css")),
+            tags.link(rel='stylesheet',
+                      type='text/css',
+                      href=url.here.child("webinterface_css"))
+        ],
+        tags.body[
+            tags.a(href='/')['Back'],
+            tags.h1["Runtime settings:"],
+            webform.renderForms('staticSettings'),
+            tags.h1["Extensions settings:"],
+            webform.renderForms('dynamicSettings'),
+        ]]])
 
     def configurable_staticSettings(self, ctx):
         return configurable.TypedInterfaceConfigurable(self)
@@ -305,11 +333,11 @@ class WebInterface(athena.LivePage):
         # print "We will be called back when the client disconnects"
 
 
-def RegisterWebsite(port):
+def RegisterWebsite(iface, port):
     website = WebInterface()
     site = appserver.NevowSite(website)
 
-    reactor.listenTCP(port, site)
+    reactor.listenTCP(port, site, interface=iface)
     print(_('HTTP interface port :'), port)
     return website
 

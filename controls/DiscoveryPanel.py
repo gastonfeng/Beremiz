@@ -29,10 +29,9 @@ import socket
 from six.moves import xrange
 import wx
 import wx.lib.mixins.listctrl as listmix
-from zeroconf import ServiceBrowser, Zeroconf
+from zeroconf import ServiceBrowser, Zeroconf, get_all_addresses
 
-
-service_type = '_PYRO._tcp.local.'
+service_type = '_Beremiz._tcp.local.'
 
 
 class AutoWidthListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
@@ -42,14 +41,7 @@ class AutoWidthListCtrl(wx.ListCtrl, listmix.ListCtrlAutoWidthMixin):
         listmix.ListCtrlAutoWidthMixin.__init__(self)
 
 
-[
-    ID_DISCOVERYDIALOG, ID_DISCOVERYDIALOGSTATICTEXT1,
-    ID_DISCOVERYDIALOGSERVICESLIST, ID_DISCOVERYDIALOGREFRESHBUTTON,
-    ID_DISCOVERYDIALOGLOCALBUTTON, ID_DISCOVERYDIALOGIPBUTTON,
-] = [wx.NewId() for _init_ctrls in range(6)]
-
-
-class DiscoveryDialog(wx.Dialog, listmix.ColumnSorterMixin):
+class DiscoveryPanel(wx.Panel, listmix.ColumnSorterMixin):
 
     def _init_coll_MainSizer_Items(self, parent):
         parent.AddWindow(self.staticText1,    0, border=20, flag=wx.TOP | wx.LEFT | wx.RIGHT | wx.GROW)
@@ -62,18 +54,15 @@ class DiscoveryDialog(wx.Dialog, listmix.ColumnSorterMixin):
 
     def _init_coll_ButtonGridSizer_Items(self, parent):
         parent.AddWindow(self.RefreshButton, 0, border=0, flag=0)
-        parent.AddWindow(self.LocalButton, 0, border=0, flag=0)
-        parent.AddWindow(self.IpButton, 0, border=0, flag=0)
-        parent.AddSizer(self.ButtonSizer, 0, border=0, flag=0)
+        # parent.AddWindow(self.ByIPCheck, 0, border=0, flag=0)
 
     def _init_coll_ButtonGridSizer_Growables(self, parent):
         parent.AddGrowableCol(0)
-        parent.AddGrowableCol(1)
         parent.AddGrowableRow(0)
 
     def _init_sizers(self):
         self.MainSizer = wx.FlexGridSizer(cols=1, hgap=0, rows=3, vgap=10)
-        self.ButtonGridSizer = wx.FlexGridSizer(cols=4, hgap=5, rows=1, vgap=0)
+        self.ButtonGridSizer = wx.FlexGridSizer(cols=2, hgap=5, rows=1, vgap=0)
 
         self._init_coll_MainSizer_Items(self.MainSizer)
         self._init_coll_MainSizer_Growables(self.MainSizer)
@@ -84,8 +73,9 @@ class DiscoveryDialog(wx.Dialog, listmix.ColumnSorterMixin):
 
     def _init_list_ctrl(self):
         # Set up list control
+        listID = wx.NewId()
         self.ServicesList = AutoWidthListCtrl(
-            id=ID_DISCOVERYDIALOGSERVICESLIST,
+            id=listID,
             name='ServicesList', parent=self, pos=wx.Point(0, 0), size=wx.Size(0, 0),
             style=wx.LC_REPORT | wx.LC_EDIT_LABELS | wx.LC_SORT_ASCENDING | wx.LC_SINGLE_SEL)
         self.ServicesList.InsertColumn(0, _('NAME'))
@@ -97,44 +87,29 @@ class DiscoveryDialog(wx.Dialog, listmix.ColumnSorterMixin):
         self.ServicesList.SetColumnWidth(2, 150)
         self.ServicesList.SetColumnWidth(3, 150)
         self.ServicesList.SetInitialSize(wx.Size(-1, 300))
-        self.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnItemSelected, id=ID_DISCOVERYDIALOGSERVICESLIST)
-        self.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.OnItemActivated, id=ID_DISCOVERYDIALOGSERVICESLIST)
+        self.Bind(wx.EVT_LIST_ITEM_SELECTED, self.OnItemSelected, id=listID)
+        self.Bind(wx.EVT_LIST_ITEM_ACTIVATED, self.OnItemActivated, id=listID)
 
     def _init_ctrls(self, prnt):
         self.staticText1 = wx.StaticText(
-            id=ID_DISCOVERYDIALOGSTATICTEXT1,
             label=_('Services available:'), name='staticText1', parent=self,
             pos=wx.Point(0, 0), size=wx.DefaultSize, style=0)
 
         self.RefreshButton = wx.Button(
-            id=ID_DISCOVERYDIALOGREFRESHBUTTON,
             label=_('Refresh'), name='RefreshButton', parent=self,
             pos=wx.Point(0, 0), size=wx.DefaultSize, style=0)
-        self.Bind(wx.EVT_BUTTON, self.OnRefreshButton, id=ID_DISCOVERYDIALOGREFRESHBUTTON)
+        self.RefreshButton.Bind(wx.EVT_BUTTON, self.OnRefreshButton)
 
-        self.LocalButton = wx.Button(
-            id=ID_DISCOVERYDIALOGLOCALBUTTON,
-            label=_('Local'), name='LocalButton', parent=self,
-            pos=wx.Point(0, 0), size=wx.DefaultSize, style=0)
-        self.Bind(wx.EVT_BUTTON, self.OnLocalButton, id=ID_DISCOVERYDIALOGLOCALBUTTON)
-
-        self.IpButton = wx.Button(
-            id=ID_DISCOVERYDIALOGIPBUTTON,
-            label=_('Add IP'), name='IpButton', parent=self,
-            pos=wx.Point(0, 0), size=wx.DefaultSize, style=0)
-        self.Bind(wx.EVT_BUTTON, self.OnIpButton, id=ID_DISCOVERYDIALOGIPBUTTON)
-
-        self.ButtonSizer = self.CreateButtonSizer(wx.OK | wx.CANCEL | wx.CENTER)
+        # self.ByIPCheck = wx.CheckBox(self, label=_("Use IP instead of Service Name"))
+        # self.ByIPCheck.SetValue(True)
 
         self._init_sizers()
         self.Fit()
 
     def __init__(self, parent):
-        wx.Dialog.__init__(
-            self, id=ID_DISCOVERYDIALOG,
-            name='DiscoveryDialog', parent=parent,
-            style=wx.DEFAULT_DIALOG_STYLE,
-            title=_('Service Discovery'))
+        wx.Panel.__init__(self, parent)
+
+        self.parent = parent
 
         self._init_list_ctrl()
         listmix.ColumnSorterMixin.__init__(self, 4)
@@ -146,38 +121,45 @@ class DiscoveryDialog(wx.Dialog, listmix.ColumnSorterMixin):
 
         self.URI = None
         self.Browser = None
+        self.ZeroConfInstance = None
 
-        self.ZeroConfInstance = Zeroconf()
         self.RefreshList()
         self.LatestSelection = None
 
+        self.IfacesMonitorState = None
+        self.IfacesMonitorTimer = wx.Timer(self)
+        self.IfacesMonitorTimer.Start(2000)
+        self.Bind(wx.EVT_TIMER, self.IfacesMonitor, self.IfacesMonitorTimer)
+
     def __del__(self):
-        if self.Browser is not None:
-            self.Browser.cancel()
+        self.IfacesMonitorTimer.Stop()
+        self.Browser.cancel()
         self.ZeroConfInstance.close()
 
+    def IfacesMonitor(self, event):
+        NewState = get_all_addresses(socket.AF_INET)
+
+        if self.IfacesMonitorState != NewState:
+            if self.IfacesMonitorState is not None:
+                # refresh only if a new address appeared
+                for addr in NewState:
+                    if addr not in self.IfacesMonitorState:
+                        self.RefreshList()
+                        break
+            self.IfacesMonitorState = NewState
+        event.Skip()
+
     def RefreshList(self):
+        self.ServicesList.DeleteAllItems()
         if self.Browser is not None:
             self.Browser.cancel()
+        if self.ZeroConfInstance is not None:
+            self.ZeroConfInstance.close()
+        self.ZeroConfInstance = Zeroconf()
         self.Browser = ServiceBrowser(self.ZeroConfInstance, service_type, self)
 
     def OnRefreshButton(self, event):
-        self.ServicesList.DeleteAllItems()
         self.RefreshList()
-
-    def OnLocalButton(self, event):
-        self.URI = "LOCAL://"
-        self.EndModal(wx.ID_OK)
-        event.Skip()
-
-    def OnIpButton(self, event):
-        def GetColText(col):
-            return self.getColumnText(self.LatestSelection, col)
-
-        if self.LatestSelection is not None:
-            self.URI = "%s://%s:%s" % tuple(map(GetColText, (1, 2, 3)))
-            self.EndModal(wx.ID_OK)
-        event.Skip()
 
     # Used by the ColumnSorterMixin, see wx/lib/mixins/listctrl.py
     def GetListCtrl(self):
@@ -193,7 +175,7 @@ class DiscoveryDialog(wx.Dialog, listmix.ColumnSorterMixin):
 
     def OnItemActivated(self, event):
         self.SetURI(event.m_itemIndex)
-        self.EndModal(wx.ID_OK)
+        self.parent.EndModal(wx.ID_OK)
         event.Skip()
 
 #    def SetURI(self, idx):
@@ -205,12 +187,21 @@ class DiscoveryDialog(wx.Dialog, listmix.ColumnSorterMixin):
 
     def SetURI(self, idx):
         self.LatestSelection = idx
-        svcname = self.getColumnText(idx, 0)
-        connect_type = self.getColumnText(idx, 1)
-        self.URI = "%s://%s" % (connect_type, svcname + '.' + service_type)
 
     def GetURI(self):
-        return self.URI
+        if self.LatestSelection is not None:
+            # if self.ByIPCheck.IsChecked():
+            svcname, scheme, host, port = \
+                map(lambda col: self.getColumnText(self.LatestSelection, col),
+                    range(4))
+            return ("%s://%s:%s#%s" % (scheme, host, port, svcname)) \
+                if scheme[-1] == "S" \
+                else ("%s://%s:%s" % (scheme, host, port))
+            # else:
+            #     svcname = self.getColumnText(self.LatestSelection, 0)
+            #     connect_type = self.getColumnText(self.LatestSelection, 1)
+            #     return str("MDNS://%s" % svcname)
+        return None
 
     def remove_service(self, zeroconf, _type, name):
         wx.CallAfter(self._removeService, name)
@@ -240,8 +231,10 @@ class DiscoveryDialog(wx.Dialog, listmix.ColumnSorterMixin):
         called when a service with the desired type is discovered.
         '''
         info = self.ZeroConfInstance.get_service_info(_type, name)
+        if info is None:
+            return
         svcname = name.split(".")[0]
-        typename = _type.split(".")[0][1:]
+        typename = info.properties.get("protocol", None)
         ip = str(socket.inet_ntoa(info.address))
         port = info.port
 
