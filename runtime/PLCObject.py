@@ -23,21 +23,25 @@
 
 
 from __future__ import absolute_import
-from threading import Thread, Lock, Semaphore, Event, Condition
+from threading import Thread, Lock, Semaphore, Event
 import ctypes
 import os
 import sys
 import traceback
 from time import time
 import _ctypes  # pylint: disable=wrong-import-order
+from six.moves import xrange
 from past.builtins import execfile
-import Pyro.core as pyro
-import six
-from six.moves import _thread, xrange
+import md5
+from tempfile import mkstemp
+import shutil
+from functools import wraps, partial
 
 from runtime.typemapping import TypeTranslator
 from runtime.loglevels import LogLevelsDefault, LogLevelsCount
+from runtime.Stunnel import getPSKID
 from runtime import PlcStatus
+from runtime import MainWorker
 
 if os.name in ("nt", "ce"):
     dlopen = _ctypes.LoadLibrary
@@ -64,141 +68,41 @@ def PLCprint(message):
     sys.stdout.flush()
 
 
-class job(object):
-    """
-    job to be executed by a worker
-    """
-    def __init__(self, call, *args, **kwargs):
-        self.job = (call, args, kwargs)
-        self.result = None
-        self.success = False
-        self.exc_info = None
-
-    def do(self):
-        """
-        do the job by executing the call, and deal with exceptions
-        """
-        try:
-            call, args, kwargs = self.job
-            self.result = call(*args, **kwargs)
-            self.success = True
-        except Exception:
-            self.success = False
-            self.exc_info = sys.exc_info()
-
-
-class worker(object):
-    """
-    serialize main thread load/unload of PLC shared objects
-    """
-    def __init__(self):
-        # Only one job at a time
-        self._finish = False
-        self._threadID = None
-        self.mutex = Lock()
-        self.todo = Condition(self.mutex)
-        self.done = Condition(self.mutex)
-        self.free = Condition(self.mutex)
-        self.job = None
-
-    def runloop(self, *args, **kwargs):
-        """
-        meant to be called by worker thread (blocking)
-        """
-        self._threadID = _thread.get_ident()
-        if args or kwargs:
-            job(*args, **kwargs).do()
-            # result is ignored
-        self.mutex.acquire()
-        while not self._finish:
-            self.todo.wait()
-            if self.job is not None:
-                self.job.do()
-                self.done.notify()
-            else:
-                self.free.notify()
-        self.mutex.release()
-
-    def call(self, *args, **kwargs):
-        """
-        creates a job, execute it in worker thread, and deliver result.
-        if job execution raise exception, re-raise same exception
-        meant to be called by non-worker threads, but this is accepted.
-        blocking until job done
-        """
-
-        _job = job(*args, **kwargs)
-
-        if self._threadID == _thread.get_ident() or self._threadID is None:
-            # if caller is worker thread execute immediately
-            _job.do()
-        else:
-            # otherwise notify and wait for completion
-            self.mutex.acquire()
-
-            while self.job is not None:
-                self.free.wait()
-
-            self.job = _job
-            self.todo.notify()
-            self.done.wait()
-            _job = self.job
-            self.job = None
-            self.mutex.release()
-
-        if _job.success:
-            return _job.result
-        else:
-            exc_type = _job.exc_info[0]
-            exc_value = _job.exc_info[1]
-            exc_traceback = _job.exc_info[2]
-            six.reraise(exc_type, exc_value, exc_traceback)
-
-    def quit(self):
-        """
-        unblocks main thread, and terminate execution of runloop()
-        """
-        # mark queue
-        self._finish = True
-        self.mutex.acquire()
-        self.job = None
-        self.todo.notify()
-        self.mutex.release()
-
-
-MainWorker = worker()
-
-
 def RunInMain(func):
+    @wraps(func)
     def func_wrapper(*args, **kwargs):
         return MainWorker.call(func, *args, **kwargs)
     return func_wrapper
 
 
-class PLCObject(pyro.ObjBase):
-    def __init__(self, server):
-        pyro.ObjBase.__init__(self)
-        self.evaluator = server.evaluator
-        self.argv = [server.workdir] + server.argv  # force argv[0] to be "path" to exec...
-        self.workingdir = server.workdir
+class PLCObject(object):
+    def __init__(self, WorkingDir, argv, statuschange, evaluator, pyruntimevars):
+        self.workingdir = WorkingDir  # must exits already
+        self.tmpdir = os.path.join(WorkingDir, 'tmp')
+        if os.path.exists(self.tmpdir):
+            shutil.rmtree(self.tmpdir)
+        os.mkdir(self.tmpdir)
+        # FIXME : is argv of any use nowadays ?
+        self.argv = [WorkingDir] + argv  # force argv[0] to be "path" to exec...
+        self.statuschange = statuschange
+        self.evaluator = evaluator
+        self.pyruntimevars = pyruntimevars
         self.PLCStatus = PlcStatus.Empty
         self.PLClibraryHandle = None
         self.PLClibraryLock = Lock()
-        self.DummyIteratorLock = None
         # Creates fake C funcs proxies
         self._InitPLCStubCalls()
-        self.daemon = server.daemon
-        self.statuschange = server.statuschange
-        self.hmi_frame = None
-        self.pyruntimevars = server.pyruntimevars
         self._loading_error = None
         self.python_runtime_vars = None
         self.TraceThread = None
         self.TraceLock = Lock()
         self.Traces = []
+        self.DebugToken = 0
+
+        self._init_blobs()
 
     # First task of worker -> no @RunInMain
-    def AutoLoad(self):
+    def AutoLoad(self, autostart):
         # Get the last transfered PLC
         try:
             self.CurrentPLCFilename = open(
@@ -206,9 +110,14 @@ class PLCObject(pyro.ObjBase):
                 "r").read().strip() + lib_ext
             if self.LoadPLC():
                 self.PLCStatus = PlcStatus.Stopped
+                if autostart:
+                    self.StartPLC()
+                    return
         except Exception:
             self.PLCStatus = PlcStatus.Empty
             self.CurrentPLCFilename = None
+
+        self.StatusChange()
 
     def StatusChange(self):
         if self.statuschange is not None:
@@ -545,7 +454,56 @@ class PLCObject(pyro.ObjBase):
         return self.PLCStatus, map(self.GetLogCount, xrange(LogLevelsCount))
 
     @RunInMain
-    def NewPLC(self, md5sum, data, extrafiles):
+    def GetPLCID(self):
+        return getPSKID(partial(self.LogMessage, 0))
+
+    def _init_blobs(self):
+        self.blobs = {}
+        if os.path.exists(self.tmpdir):
+            shutil.rmtree(self.tmpdir)
+        os.mkdir(self.tmpdir)
+
+    @RunInMain
+    def SeedBlob(self, seed):
+        blob = (mkstemp(dir=self.tmpdir) + (md5.new(),))
+        _fobj, _path, md5sum = blob
+        md5sum.update(seed)
+        newBlobID = md5sum.digest()
+        self.blobs[newBlobID] = blob
+        return newBlobID
+
+    @RunInMain
+    def AppendChunkToBlob(self, data, blobID):
+        blob = self.blobs.pop(blobID, None)
+
+        if blob is None:
+            return None
+
+        fobj, _path, md5sum = blob
+        md5sum.update(data)
+        newBlobID = md5sum.digest()
+        os.write(fobj, data)
+        self.blobs[newBlobID] = blob
+        return newBlobID
+
+    @RunInMain
+    def PurgeBlobs(self):
+        for fobj, _path, _md5sum in self.blobs:
+            os.close(fobj)
+        self._init_blobs()
+
+    def _BlobAsFile(self, blobID, newpath):
+        blob = self.blobs.pop(blobID, None)
+
+        if blob is None:
+            raise Exception(_("Missing data to create file: {}").format(newpath))
+
+        fobj, path, _md5sum = blob
+        os.close(fobj)
+        shutil.move(path, newpath)
+
+    @RunInMain
+    def NewPLC(self, md5sum, plc_object, extrafiles):
         if self.PLCStatus in [PlcStatus.Stopped, PlcStatus.Empty, PlcStatus.Broken]:
             NewFileName = md5sum + lib_ext
             extra_files_log = os.path.join(self.workingdir, "extra_files.txt")
@@ -555,18 +513,13 @@ class PLCObject(pyro.ObjBase):
                 else None
             new_PLC_filename = os.path.join(self.workingdir, NewFileName)
 
-            # Some platform (i.e. Xenomai) don't like reloading same .so file
-            replace_PLC_shared_object = new_PLC_filename != old_PLC_filename
-
-            if replace_PLC_shared_object:
-                self.UnLoadPLC()
+            self.UnLoadPLC()
 
             self.LogMessage("NewPLC (%s)" % md5sum)
             self.PLCStatus = PlcStatus.Empty
 
             try:
-                if replace_PLC_shared_object:
-                    os.remove(old_PLC_filename)
+                os.remove(old_PLC_filename)
                 for filename in open(extra_files_log, "rt").readlines() + [extra_files_log]:
                     try:
                         os.remove(os.path.join(self.workingdir, filename.strip()))
@@ -577,17 +530,16 @@ class PLCObject(pyro.ObjBase):
 
             try:
                 # Create new PLC file
-                if replace_PLC_shared_object:
-                    open(new_PLC_filename, 'wb').write(data)
+                self._BlobAsFile(plc_object, new_PLC_filename)
 
                 # Store new PLC filename based on md5 key
                 open(self._GetMD5FileName(), "w").write(md5sum)
 
                 # Then write the files
                 log = open(extra_files_log, "w")
-                for fname, fdata in extrafiles:
+                for fname, blobID in extrafiles:
                     fpath = os.path.join(self.workingdir, fname)
-                    open(fpath, "wb").write(fdata)
+                    self._BlobAsFile(blobID, fpath)
                     log.write(fname+'\n')
 
                 # Store new PLC filename
@@ -598,9 +550,7 @@ class PLCObject(pyro.ObjBase):
                 PLCprint(traceback.format_exc())
                 return False
 
-            if not replace_PLC_shared_object:
-                self.PLCStatus = PlcStatus.Stopped
-            elif self.LoadPLC():
+            if self.LoadPLC():
                 self.PLCStatus = PlcStatus.Stopped
             else:
                 self.PLCStatus = PlcStatus.Broken
@@ -617,11 +567,13 @@ class PLCObject(pyro.ObjBase):
             pass
         return False
 
+    @RunInMain
     def SetTraceVariablesList(self, idxs):
         """
         Call ctype imported function to append
         these indexes to registred variables in PLC debugger
         """
+        self.DebugToken += 1
         if idxs:
             # suspend but dont disable
             if self._suspendDebug(False) == 0:
@@ -636,8 +588,10 @@ class PLCObject(pyro.ObjBase):
                     self._RegisterDebugVariable(idx, force)
                 self._TracesSwap()
                 self._resumeDebug()
+                return self.DebugToken
         else:
             self._suspendDebug(True)
+        return None
 
     def _TracesSwap(self):
         self.LastSwapTrace = time()
@@ -651,8 +605,10 @@ class PLCObject(pyro.ObjBase):
         return Traces
 
     @RunInMain
-    def GetTraceVariables(self):
-        return self.PLCStatus, self._TracesSwap()
+    def GetTraceVariables(self, DebugToken):
+        if (DebugToken is not None and DebugToken == self.DebugToken):
+            return self.PLCStatus, self._TracesSwap()
+        return PlcStatus.Broken, []
 
     def TraceThreadProc(self):
         """
