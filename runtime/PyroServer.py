@@ -9,13 +9,15 @@
 
 # See COPYING file for copyrights details.
 
-from __future__ import absolute_import
+# from __future__ import absolute_import
 from __future__ import print_function
-import sys
+
 import os
+import sys
 
 import Pyro
 import Pyro.core as pyro
+
 import runtime
 from runtime.ServicePublisher import ServicePublisher
 

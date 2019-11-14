@@ -7,9 +7,10 @@
 #
 # See COPYING.Runtime file for copyrights details.
 
-from __future__ import absolute_import
+# from __future__ import absolute_import
 import sys
 from threading import Lock, Condition
+
 import six
 from six.moves import _thread
 
@@ -51,6 +52,7 @@ class worker(object):
         self.done = Condition(self.mutex)
         self.free = Condition(self.mutex)
         self.job = None
+        self.enabled = True
 
     def reraise(self, job):
         """

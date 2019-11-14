@@ -24,26 +24,20 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
-from __future__ import division
-from copy import deepcopy
-import os
-import re
 import datetime
+import os
+from copy import deepcopy
 from time import localtime
-from functools import reduce
-from future.builtins import round
 
-import util.paths as paths
+from PLCGenerator import *
+from graphics.GraphicCommons import *
 from plcopen import *
-from plcopen.types_enums import *
+from plcopen.BlockInstanceCollector import BlockInstanceCollector
+from plcopen.InstanceTagnameCollector import InstanceTagnameCollector
 from plcopen.InstancesPathCollector import InstancesPathCollector
 from plcopen.POUVariablesCollector import POUVariablesCollector
-from plcopen.InstanceTagnameCollector import InstanceTagnameCollector
-from plcopen.BlockInstanceCollector import BlockInstanceCollector
 from plcopen.VariableInfoCollector import VariableInfoCollector
-from graphics.GraphicCommons import *
-from PLCGenerator import *
+from util import paths
 
 duration_model = re.compile(r"(?:([0-9]{1,2})h)?(?:([0-9]{1,2})m(?!s))?(?:([0-9]{1,2})s)?(?:([0-9]{1,3}(?:\.[0-9]*)?)ms)?")
 VARIABLE_NAME_SUFFIX_MODEL = re.compile(r'(\d+)$')
@@ -74,7 +68,7 @@ class UndoBuffer(object):
             self.MinIndex = 0
             self.MaxIndex = 0
         # Initialising buffer with currentstate at the first place
-        for i in xrange(UNDO_BUFFER_LENGTH):
+        for i in range(UNDO_BUFFER_LENGTH):
             if i == 0:
                 self.Buffer.append(currentstate)
             else:
@@ -457,19 +451,19 @@ class PLCControler(object):
                 self.NextCompiledProject = self.Copy(self.Project)
                 program_text = "".join([item[0] for item in self.ProgramChunks])
                 if filepath is not None:
-                    programfile = open(filepath, "w")
-                    programfile.write(program_text.encode("utf-8"))
+                    programfile = open(filepath, "w", encoding='utf-8')
+                    programfile.write(program_text)
                     programfile.close()
                     self.ProgramFilePath = filepath
                 return program_text, errors, warnings
-            except PLCGenException as ex:
+            except Exception as ex:
                 errors.append(ex)
         else:
             errors.append("No project opened")
         return "", errors, warnings
 
     def DebugAvailable(self):
-        return self.CurrentCompiledProject is not None
+        return True
 
     def ProgramTransferred(self):
         if self.NextCompiledProject is None:
@@ -1158,7 +1152,9 @@ class PLCControler(object):
         for _sectioname, blocktype in self.TotalTypesDict.get(typename, []):
             if inputs is not None and inputs != "undefined":
                 block_inputs = tuple([var_type for _name, var_type, _modifier in blocktype["inputs"]])
-                if reduce(lambda x, y: x and y, map(lambda x: x[0] == "ANY" or self.IsOfType(*x), zip(inputs, block_inputs)), True):
+                if reduce(lambda x, y: x and y,
+                          list(map(lambda x: x[0] == "ANY" or self.IsOfType(*x), list(zip(inputs, block_inputs)))),
+                          True):
                     return blocktype
             else:
                 if result_blocktype:
@@ -1221,7 +1217,7 @@ class PLCControler(object):
         if project is not None and words[0] in ["P", "T", "A"]:
             name = words[1]
         blocktypes = []
-        for blocks in self.TotalTypesDict.itervalues():
+        for blocks in list(self.TotalTypesDict.values()):
             for _sectioname, block in blocks:
                 if block["type"] == "functionBlock":
                     blocktypes.append(block["name"])
@@ -1276,7 +1272,7 @@ class PLCControler(object):
             result = project.getpou(typename)
             if result is not None:
                 return result
-        for standardlibrary in StdBlckLibs.values():
+        for standardlibrary in list(StdBlckLibs.values()):
             result = standardlibrary.getpou(typename)
             if result is not None:
                 return result
@@ -1429,7 +1425,7 @@ class PLCControler(object):
 
     # Return Subrange types
     def GetSubrangeBaseTypes(self, exclude, debug=False):
-        subrange_basetypes = DataTypeRange.keys()
+        subrange_basetypes = list(DataTypeRange.keys())
         project = self.GetProject(debug)
         if project is not None:
             subrange_basetypes.extend(
@@ -1944,9 +1940,9 @@ class PLCControler(object):
                 new_pos[0] -= width // 2
                 new_pos[1] -= height // 2
             else:
-                new_pos = map(lambda x: x + 30, new_pos)
+                new_pos = list(map(lambda x: x + 30, new_pos))
             if scaling[0] != 0 and scaling[1] != 0:
-                min_pos = map(lambda x: 30 / x, scaling)
+                min_pos = list(map(lambda x: 30 / x, scaling))
                 minx = round(min_pos[0])
                 if int(min_pos[0]) == round(min_pos[0]):
                     minx += 1

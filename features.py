@@ -10,7 +10,7 @@
 
 libraries = [
     ('Native', 'NativeLib.NativeLibrary', True),
-    ('Python', 'py_ext.PythonLibrary', True),
+    ('Python', 'py_ext.PythonLibrary', False),
     ('Etherlab', 'etherlab.EthercatMaster.EtherlabLibrary', False),
     ('SVGUI', 'svgui.SVGUILibrary', False)]
 

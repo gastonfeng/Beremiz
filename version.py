@@ -23,11 +23,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301, USA.
 
 
-from __future__ import absolute_import
+# from __future__ import absolute_import
 from __future__ import unicode_literals
 
-import subprocess
 import os
+import subprocess
 
 import util.paths as paths
 
@@ -50,11 +50,18 @@ def GetAppRevision():
     app_dir = paths.AbsDir(__file__)
     try:
         pipe = subprocess.Popen(
-            ["hg", "id", "-i"],
+            ["git", "pull"],
             stdout=subprocess.PIPE,
-            cwd=app_dir
+            cwd=app_dir, shell=True
         )
-        rev = pipe.communicate()[0]
+        pipe = subprocess.Popen(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            stdout=subprocess.PIPE,
+            cwd=app_dir, shell=True
+        )
+        rev = pipe.communicate()
+        rev = rev[0]
+        rev = rev.decode()
         if pipe.returncode != 0:
             rev = None
     except Exception:
@@ -73,7 +80,7 @@ def GetAppRevision():
 
 def GetAboutDialogInfo():
     import wx
-    info = wx.AboutDialogInfo()
+    info = wx.adv.AboutDialogInfo()
 
     info.Name = "Beremiz"
     info.Version = app_version
@@ -135,6 +142,7 @@ def GetAboutDialogInfo():
         "  Yiwei Yan <523136664@qq.com>, 2018",
         "  Ji Wang <2485567515@qq.com>, 2019",
         "  珂 曾 <15627997@qq.com>, 2019",
+        "  Gastonfeng<gastonfeng@gmail.com>, 2019",
         "",
 
         "Dutch (Netherlands)",

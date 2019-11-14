@@ -24,25 +24,27 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
+# from __future__ import absolute_import
 from __future__ import print_function
+
+import getopt
 import os
 import sys
-import getopt
 import threading
-from threading import Thread, Semaphore, Lock, currentThread
 from builtins import str as text
+from threading import Thread, Semaphore, Lock, currentThread
+
 from past.builtins import execfile
 from six.moves import builtins
 
 import runtime
-from runtime.PyroServer import PyroServer
-from runtime.xenomai import TryPreloadXenomai
+import util.paths as paths
 from runtime import LogMessageAndException
 from runtime import PlcStatus
 from runtime import default_evaluator
+from runtime.PyroServer import PyroServer
 from runtime.Stunnel import ensurePSK
-import util.paths as paths
+from runtime.xenomai import TryPreloadXenomai
 
 
 def version():
