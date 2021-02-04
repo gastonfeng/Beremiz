@@ -23,19 +23,23 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
-import os
-import sys
-import subprocess
+
 import ctypes
-from threading import Timer, Lock, Thread, Semaphore
+import os
 import signal
+import subprocess
+import sys
+import time
+from threading import Timer, Lock, Thread, Semaphore
+
+import wx
 
 
 class outputThread(Thread):
     """
     Thread is used to print the output of a command to the stdout
     """
+
     def __init__(self, Proc, fd, callback=None, endcallback=None):
         Thread.__init__(self)
         self.killed = False
@@ -58,7 +62,7 @@ class outputThread(Thread):
             outchunk = self.fd.readline()
             if self.callback:
                 self.callback(outchunk)
-        while outchunk != '' and not self.killed:
+        while outchunk != b'' and not self.killed:
             outchunk = self.fd.readline()
             if self.callback:
                 self.callback(outchunk)
@@ -97,8 +101,7 @@ class ProcessLogger(object):
 
         if encoding is None:
             encoding = fsencoding
-        self.Command = [self.Command[0].encode(fsencoding)]+map(
-            lambda x: x.encode(encoding), self.Command[1:])
+        self.Command = [self.Command[0]] + list(map(lambda x: x, self.Command[1:]))
 
         self.finish_callback = finish_callback
         self.no_stdout = no_stdout
@@ -118,24 +121,26 @@ class ProcessLogger(object):
         self.endlock = Lock()
 
         popenargs = {
-            "cwd":    os.getcwd() if cwd is None else cwd,
-            "stdin":  subprocess.PIPE,
+            "cwd": os.getcwd() if cwd is None else cwd,
+            "stdin": subprocess.PIPE,
             "stdout": subprocess.PIPE,
             "stderr": subprocess.PIPE
         }
 
-        if no_gui and os.name in ("nt", "ce"):
+        if no_gui and wx.Platform == '__WXMSW__':
             self.startupinfo = subprocess.STARTUPINFO()
             self.startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             popenargs["startupinfo"] = self.startupinfo
-        elif os.name == 'posix':
+        elif wx.Platform == '__WXGTK__':
             popenargs["shell"] = False
 
         if timeout:
+            self._timeout = timeout
             self.timeout = Timer(timeout, self.endlog)
             self.timeout.start()
         else:
             self.timeout = None
+            self._timeout = None
 
         self.Proc = subprocess.Popen(self.Command, **popenargs)
 
@@ -152,6 +157,7 @@ class ProcessLogger(object):
             self.errors)
         self.errt.start()
         self.startsem.release()
+        self.startTime = time.time()
 
     def output(self, v):
         if v and self.output_encoding:
@@ -160,7 +166,7 @@ class ProcessLogger(object):
         self.outlen += 1
         if not self.no_stdout:
             self.logger.write(v)
-        if (self.keyword and v.find(self.keyword) != -1) or (self.outlimit and self.outlen > self.outlimit):
+        if (self.keyword and v.find(self.keyword.encode()) != -1) or (self.outlimit and self.outlen > self.outlimit):
             self.endlog()
 
     def errors(self, v):
@@ -178,6 +184,7 @@ class ProcessLogger(object):
         self.logger.write_warning(_("exited with status {a1} (pid {a2})\n").format(a1=str(ecode), a2=str(pid)))
 
     def finish(self, pid, ecode):
+        # self.logger.write(self.Command_str + "finish\n")
         # avoid running function before start is finished
         self.startsem.acquire()
         self.startsem.release()
@@ -198,7 +205,7 @@ class ProcessLogger(object):
 
         self.outt.killed = True
         self.errt.killed = True
-        if os.name in ("nt", "ce"):
+        if wx.Platform == '__WXMSW__':
             PROCESS_TERMINATE = 1
             handle = ctypes.windll.kernel32.OpenProcess(PROCESS_TERMINATE, False, self.Proc.pid)
             ctypes.windll.kernel32.TerminateProcess(handle, -1)
@@ -222,5 +229,13 @@ class ProcessLogger(object):
             self.finishsem.release()
 
     def spin(self):
-        self.finishsem.acquire()
-        return [self.exitcode, "".join(self.outdata), "".join(self.errdata)]
+        while not self.finishsem.acquire(blocking=False) and (
+                not self._timeout or ((time.time() - self.startTime) * 1000) < self._timeout):
+            eventLoop = wx.GUIEventLoop()
+            eventLoop.Dispatch()
+        try:
+            return [self.exitcode, "".join([x.decode('gbk', errors='ignore') for x in self.outdata]),
+                    "".join([x.decode('gbk', errors='ignore') for x in self.errdata])]
+        except:
+            return [self.exitcode, "".join([x.decode() for x in self.outdata]),
+                    "".join([x.decode(errors='ignore') for x in self.errdata])]

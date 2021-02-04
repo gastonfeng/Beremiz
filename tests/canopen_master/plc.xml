@@ -1,7 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
-<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.plcopen.org/xml/tc6_0201" xmlns:xhtml="http://www.w3.org/1999/xhtml" xsi:schemaLocation="http://www.plcopen.org/xml/tc6_0201">
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.plcopen.org/xml/tc6_0201"
+         xsi:schemaLocation="http://www.plcopen.org/xml/tc6_0201">
   <fileHeader companyName="beremiz" productName="beremiz" productVersion="1" creationDateTime="2008-06-24T18:44:00"/>
-  <contentHeader name="canopen_master" modificationDateTime="2018-09-26T13:31:52" language="en-US">
+    <contentHeader name="canopen_master" modificationDateTime="2020-05-30T19:23:02" language="en-US">
     <coordinateInfo>
       <fbd>
         <scaling x="0" y="0"/>

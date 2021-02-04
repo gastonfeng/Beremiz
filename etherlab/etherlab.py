@@ -9,22 +9,19 @@
 #
 # See COPYING file for copyrights details.
 
-from __future__ import absolute_import
+
+import csv
 import os
 import shutil
-import csv
 from builtins import str as text
 
-from lxml import etree
 import wx
+from lxml import etree
 
-from xmlclass import *
-
-from ConfigTreeNode import XSDSchemaErrorMessage
-
-from etherlab.EthercatSlave import ExtractHexDecValue, ExtractName
-from etherlab.EthercatMaster import _EthercatCTN
 from etherlab.ConfigEditor import LibraryEditor, ETHERCAT_VENDOR, ETHERCAT_GROUP, ETHERCAT_DEVICE
+from etherlab.EthercatMaster import _EthercatCTN
+from etherlab.EthercatSlave import ExtractHexDecValue, ExtractName
+from xmlclass import *
 
 ScriptDirectory = os.path.split(os.path.realpath(__file__))[0]
 
@@ -36,6 +33,13 @@ EtherCATInfoParser = GenerateParserFromXSD(os.path.join(os.path.dirname(__file__
 
 
 def EtherCATInfo_XPath(xpath):
+    return etree.XPath(xpath)
+
+
+EtherCATBaseParser = GenerateParserFromXSD(os.path.join(os.path.dirname(__file__), "EtherCATBase.xsd"))
+
+
+def EtherCATBase_XPath(xpath):
     return etree.XPath(xpath)
 
 
@@ -59,6 +63,19 @@ ENTRY_INFOS_KEYS = [
     ("PDO name", str, ""),
     ("PDO type", str, "")]
 
+# Read DefaultValue from ESI file
+# Add by jblee 151229
+ENTRY_INFOS_KEYS_FOR_DV = [
+    ("Index", lambda x: "#x%4.4X" % int(x), "#x0000"),
+    ("SubIndex", str, "0"),
+    ("Name", str, ""),
+    ("Type", str, ""),
+    ("BitSize", int, 0),
+    ("Access", str, ""),
+    ("PDOMapping", str, ""),
+    ("DefaultValue", str, ""),
+    ("Sub_entry_flag", str, "0")]
+
 
 class EntryListFactory(object):
 
@@ -67,10 +84,16 @@ class EntryListFactory(object):
 
     def AddEntry(self, context, *args):
         index, subindex = map(lambda x: int(x[0]), args[:2])
-        new_entry_infos = {
-            key: translate(arg[0]) if len(arg) > 0 else default
-            for (key, translate, default), arg
-            in zip(ENTRY_INFOS_KEYS, args)}
+        if len(args) > 9:
+            new_entry_infos = {
+                key: translate(arg[0]) if len(arg) > 0 else default
+                for (key, translate, default), arg
+                in list(zip(ENTRY_INFOS_KEYS, args))}
+        else:
+            new_entry_infos = {
+                key: translate(arg[0]) if len(arg) > 0 else default
+                for (key, translate, default), arg
+                in list(zip(ENTRY_INFOS_KEYS_FOR_DV, args))}
 
         if (index, subindex) != (0, 0):
             entry_infos = self.Entries.get((index, subindex))
@@ -88,38 +111,178 @@ entries_list_xslt = etree.parse(
 
 cls = EtherCATInfoParser.GetElementClass("DeviceType")
 if cls:
+    cls.DataTypes = None
 
     profile_numbers_xpath = EtherCATInfo_XPath("Profile/ProfileNo")
 
+
     def GetProfileNumbers(self):
         return [number.text for number in profile_numbers_xpath(self)]
+
+
     setattr(cls, "GetProfileNumbers", GetProfileNumbers)
+
 
     def getCoE(self):
         mailbox = self.getMailbox()
         if mailbox is not None:
             return mailbox.getCoE()
         return None
+
+
     setattr(cls, "getCoE", getCoE)
 
+
+    # Modify by jblee
+    def ExtractDataTypes(self):
+        # self.DataTypes = {}
+        # self.DT = {}
+        DT = {}
+        objects = []
+
+        # get Profile Field
+        for profile in self.getProfile():
+            # get each (ProfileNo, Dictionary) Field as child
+            for child in profile.getchildren():
+                # child.text is not None -> ProfileNo, is None -> Dictionary
+                if child.text is None:
+                    # get each (DataTypes, Objects) Field 
+                    dataTypes = child.getDataTypes()
+                    objects = child.getObjects()
+
+                    for dataType in dataTypes.getDataType():
+                        # if dataType.getName() is not None:
+                        #    print dataType.getName(), dataType
+                        DT[dataType.getName()] = dataType
+
+        return DT, objects
+
+
+    setattr(cls, "ExtractDataTypes", ExtractDataTypes)
+
+
     def GetEntriesList(self, limits=None):
+        DataTypes, objects = self.ExtractDataTypes()
+
         entries = {}
 
-        factory = EntryListFactory(entries)
+        # get each Object Field
+        for object in objects:
+            # Object Field mendatory : Index, Name, Type, BitSize
+            # Frequently Use : Info, Flags
+            # Info Field -> DefaultData, SubItem
+            # Flags Field -> Access, Category, PdoMapping
+            object_index = object.getIndex().getcontent()
+            index = ExtractHexDecValue(object_index)
+            if limits is None or limits[0] <= index <= limits[1]:
+                object_type = object.getType()
+                object_name = ExtractName(object.getName())
+                object_size = object.getBitSize()
+                defaultData = ""
+                object_access = ""
+                object_PDOMapping_data = ""
 
-        entries_list_xslt_tree = etree.XSLT(
-            entries_list_xslt, extensions={
-                ("entries_list_ns", "AddEntry"): factory.AddEntry,
-                ("entries_list_ns", "HexDecValue"): HexDecValue,
-                ("entries_list_ns", "EntryName"): EntryName})
-        entries_list_xslt_tree(self, **dict(zip(
-            ["min_index", "max_index"],
-            map(lambda x: etree.XSLT.strparam(str(x)),
-                limits if limits is not None else [0x0000, 0xFFFF])
-            )))
+                object_type_infos = DataTypes.get(object_type, None)
+                subItem_infos = object_type_infos.getchildren()
+                countSubIndex = 0
+                if len(subItem_infos) > 2:
+                    for subItem_info in subItem_infos:
+                        if subItem_info.tag == "SubItem":
+                            subItemName = subItem_info.getName()
+                            subIdx = subItem_info.getSubIdx()
+                            if subIdx is not None:
+                                object_subidx = ExtractHexDecValue(subIdx)
+                            else:
+                                object_subidx = ExtractHexDecValue(countSubIndex)
+                            subType = subItem_info.getType()
+                            subBitSize = subItem_info.getBitSize()
+                            subFlags = subItem_info.getFlags()
+                            subAccess = ""
+                            subPDOMapping_data = ""
+                            if subFlags is not None:
+                                subAccess = subFlags.getAccess().getcontent()
+                                subPDOMapping = subFlags.getPdoMapping()
+                                if subPDOMapping is not None:
+                                    subPDOMapping_data = subFlags.getPdoMapping().upper()
+
+                            entries[(index, object_subidx)] = {
+                                "Index": object_index,
+                                "SubIndex": subIdx,
+                                "Name": "%s - %s" %
+                                        (object_name.decode("utf-8"),
+                                         subItemName.decode("utf-8")),
+                                "Type": subType,
+                                "BitSize": subBitSize,
+                                "Access": subAccess,
+                                "PDOMapping": subPDOMapping_data}
+
+                            countSubIndex += 1
+
+                    info = object.getInfo()
+                    # subItemTest : check subItem 
+                    countSubIndex = 0
+                    if info is not None:
+                        subItems = info.getchildren()
+                        if len(subItems) > 1:
+                            for subItem in subItems:
+                                defaultdata_subidx = ExtractHexDecValue(countSubIndex)
+                                defaultData = subItem.getchildren()[1].findtext("DefaultData")
+                                entry = entries.get((index, defaultdata_subidx), None)
+                                if entry is not None:
+                                    entry["DefaultData"] = defaultData
+                                countSubIndex += 1
+
+                else:
+                    info = object.getInfo()
+                    if info is not None:
+                        subItems = info.getchildren()
+                        if len(subItems) <= 1:
+                            defaultData = subItems[0].text
+
+                    object_flag = object.getFlags()
+                    object_access = object_flag.getAccess().getcontent()
+                    object_PDOMapping = object_flag.getPdoMapping()
+                    if object_PDOMapping is not None:
+                        object_PDOMapping_data = object_flag.getPdoMapping().upper()
+                    entries[(index, 0)] = {
+                        "Index": object_index,
+                        "SubIndex": "0",
+                        "Name": object_name,
+                        "Type": object_type,
+                        "BitSize": object_size,
+                        "DefaultData": defaultData,
+                        "Access": object_access,
+                        "PDOMapping": object_PDOMapping_data}
+
+        for TxPdo in self.getTxPdo():
+            ExtractPdoInfos(TxPdo, "Transmit", entries, limits)
+        for RxPdo in self.getRxPdo():
+            ExtractPdoInfos(RxPdo, "Receive", entries, limits)
 
         return entries
+
+
     setattr(cls, "GetEntriesList", GetEntriesList)
+
+
+    #    def GetEntriesList(self, limits=None):
+    #        entries = {}
+
+    #        factory = EntryListFactory(entries)
+
+    #        entries_list_xslt_tree = etree.XSLT(
+    #            entries_list_xslt, extensions = {
+    #                ("entries_list_ns", "AddEntry"): factory.AddEntry,
+    #                ("entries_list_ns", "HexDecValue"): HexDecValue,
+    #                ("entries_list_ns", "EntryName"): EntryName})
+    #        entries_list_xslt_tree(self, **dict(zip(
+    #            ["min_index", "max_index"],
+    #            map(lambda x: etree.XSLT.strparam(str(x)),
+    #                limits if limits is not None else [0x0000, 0xFFFF])
+    #            )))
+    #
+    #        return entries
+    #    setattr(cls, "GetEntriesList", GetEntriesList)
 
     def GetSyncManagers(self):
         sync_managers = []
@@ -135,6 +298,8 @@ if cls:
                 sync_manager_infos[name] = value
             sync_managers.append(sync_manager_infos)
         return sync_managers
+
+
     setattr(cls, "GetSyncManagers", GetSyncManagers)
 
 
@@ -156,8 +321,43 @@ def SortGroupItems(group):
     group["children"].sort(GroupItemCompare)
 
 
-class ModulesLibrary(object):
+def ExtractPdoInfos(pdo, pdo_type, entries, limits=None):
+    pdo_index = pdo.getIndex().getcontent()
+    pdo_name = ExtractName(pdo.getName())
+    exclude = pdo.getExclude()
+    for pdo_entry in pdo.getEntry():
+        entry_index = pdo_entry.getIndex().getcontent()
+        entry_subindex = pdo_entry.getSubIndex()
+        index = ExtractHexDecValue(entry_index)
+        subindex = ExtractHexDecValue(entry_subindex)
+        object_size = pdo_entry.getBitLen()
 
+        if limits is None or limits[0] <= index <= limits[1]:
+            entry = entries.get((index, subindex), None)
+            if entry is not None:
+                entry["PDO index"] = pdo_index
+                entry["PDO name"] = pdo_name
+                entry["PDO type"] = pdo_type
+            else:
+                entry_type = pdo_entry.getDataType()
+                if entry_type is not None:
+                    if pdo_type == "Transmit":
+                        access = "ro"
+                        pdomapping = "T"
+                    else:
+                        access = "wo"
+                        pdomapping = "R"
+                    entries[(index, subindex)] = {
+                        "Index": entry_index,
+                        "SubIndex": entry_subindex,
+                        "Name": ExtractName(pdo_entry.getName()),
+                        "Type": entry_type.getcontent(),
+                        "BitSize": object_size,
+                        "Access": access,
+                        "PDOMapping": pdomapping}
+
+
+class ModulesLibrary(object):
     MODULES_EXTRA_PARAMS = [
         (
             "pdo_alignment",
@@ -211,9 +411,20 @@ for mapping needed location variables
 
     groups_xpath = EtherCATInfo_XPath("Descriptions/Groups/Group")
     devices_xpath = EtherCATInfo_XPath("Descriptions/Devices/Device")
+    module_xpath = EtherCATBase_XPath("Descriptions/Modules/Module")
 
     def LoadModules(self):
         self.Library = {}
+        # add by jblee for Modular Device Profile
+        self.MDPList = []
+        self.ModuleList = []
+        self.MDPEntryList = {}
+        dtDic = {}
+        self.idxIncrement = 0
+        self.slotIncrement = 0
+        # add by jblee for PDO Mapping
+        self.DataTypes = {}
+        self.ObjectDictionary = {}
 
         files = os.listdir(self.Path)
         for file in files:
@@ -221,12 +432,12 @@ for mapping needed location variables
             if os.path.isfile(filepath) and os.path.splitext(filepath)[-1] == ".xml":
                 self.modules_infos = None
 
-                xmlfile = open(filepath, 'r')
+                xmlfile = open(filepath, 'r', encoding='utf-8')
                 try:
                     self.modules_infos, error = EtherCATInfoParser.LoadXMLString(xmlfile.read())
-                    if error is not None:
-                        self.GetCTRoot().logger.write_warning(
-                            XSDSchemaErrorMessage % (filepath + error))
+                    # if error is not None:
+                    #     self.GetCTRoot().logger.write_warning(
+                    #         XSDSchemaErrorMessage % (filepath + error))
                 except Exception as exc:
                     self.modules_infos, error = None, text(exc)
                 xmlfile.close()
@@ -241,16 +452,17 @@ for mapping needed location variables
 
                     for group in self.groups_xpath(self.modules_infos):
                         group_type = group.getType()
+                        # add for XmlToEeprom Func by jblee.
+                        self.LcId_data = group.getchildren()[1]
+                        self.Image16x14_data = group.getchildren()[2]
 
-                        vendor_category["groups"].setdefault(
-                            group_type,
-                            {
-                                "name": ExtractName(group.getName(), group_type),
-                                "parent": group.getParentGroup(),
-                                "order": group.getSortOrder(),
-                                # "value": group.getcontent()["value"],
-                                "devices": [],
-                            })
+                        vendor_category["groups"].setdefault(group_type, {
+                            "name": ExtractName(group.getName(), group_type),
+                            "parent": group.getParentGroup(),
+                            "order": group.getSortOrder(),
+                            "devices": [],
+                            # add jblee for support Moduler Device Profile (MDP)
+                            "modules": []})
 
                     for device in self.devices_xpath(self.modules_infos):
                         device_group = device.getGroupType()
@@ -259,21 +471,106 @@ for mapping needed location variables
                         vendor_category["groups"][device_group]["devices"].append(
                             (device.getType().getcontent(), device))
 
-                else:
+                        # ------------------ Test Section --------------------#
+                        slots = device.getSlots()
+                        if slots is not None:
+                            for slot in slots.getSlot():
+                                self.idxIncrement = slot.getSlotIndexIncrement()
+                                self.slotIncrement = slot.getSlotPdoIncrement()
+                                for child in slot.getchildren():
+                                    if child.tag == "ModuleClass":
+                                        child_class = child.getClass()
+                                        child_name = child.getName()
 
-                    self.GetCTRoot().logger.write_error(
-                        _("Couldn't load {a1} XML file:\n{a2}").format(a1=filepath, a2=error))
+                        # -------------------- Test Section ----------------------------------#
+                        LocalMDPList = []
+                        for module in self.module_xpath(self.modules_infos):
+                            module_type = module.getType().getModuleClass()
+                            module_name = module.getName()
+                            LocalMDPData = ExtractName(module_name) + " (" + module_type + ")"
+
+                            self.ModuleList.append(module)
+                            try:
+                                module_pdos = module.getTxPdo()
+                                module_pdos += module.getRxPdo()
+                                for module_pdo in module_pdos:
+                                    device_name = ExtractName(module_name)
+                                    pdo_index = module_pdo.getIndex().getcontent()
+                                    pdo_name = ExtractName(module_pdo.getName())
+                                    pdo_entry = module_pdo.getEntry()
+                                    if module_pdo.tag == "TxPdo":
+                                        mapping_type = "T"
+                                    else:
+                                        mapping_type = "R"
+
+                                    LocalMDPEntry = []
+                                    for entry in pdo_entry:
+                                        entry_index = entry.getIndex().getcontent()
+                                        entry_subidx = entry.getSubIndex()
+                                        entry_name = ExtractName(entry.getName())
+                                        entry_bitsize = entry.getBitLen()
+                                        try:
+                                            entry_type = entry.getDataType().getcontent()
+                                        except:
+                                            entry_type = ""
+
+                                        LocalMDPEntry.append({
+                                            "Index": entry_index,
+                                            "SubIndex": entry_subidx,
+                                            "Name": "%s - %s" % (pdo_name, entry_name),
+                                            "Type": entry_type,
+                                            "BitSize": entry_bitsize,
+                                            "Access": "",
+                                            "PDOMapping": mapping_type})
+
+                                    self.MDPEntryList[device_name] = LocalMDPEntry
+
+                                LocalMDPList.append([LocalMDPData, module, LocalMDPEntry])
+                            except:
+                                LocalMDPList.append([LocalMDPData, module, []])
+
+                        if LocalMDPList:
+                            vendor_category["groups"][device_group]["modules"].append(
+                                (device.getType().getcontent(), LocalMDPList, self.idxIncrement, self.slotIncrement))
+                        # self.MDPList.append([device.getType().getcontent(), LocalMDPList,
+                        #                     self.idxIncrement, self.slotIncrement])
+
+                # --------------------------------------------------------------------- #
+
+            # else:
+            #     self.GetCTRoot().logger.write_error(
+            #         _("Couldn't load {a1} XML file:\n{a2}").format(a1=filepath, a2=error))
 
         return self.Library
+
+    # add jblee
+    def GetMDPList(self):
+        return self.MDPList
+
+    # add jblee
+    def GetSelectModule(self, idx):
+        return self.ModuleList[idx]
+
+    # add jblee
+    def GetModuleEntryList(self):
+        return self.MDPEntryList
+
+    # add jblee
+    def GetModuleIncrement(self):
+        return (self.idxIncrement, self.slotIncrement)
+
+    # add jblee
+    # def GetEntriesList(self):
+    #    return self.ObjectDictionary
 
     def GetModulesLibrary(self, profile_filter=None):
         if self.Library is None:
             self.LoadModules()
         library = []
-        for vendor_id, vendor in self.Library.iteritems():
+        for vendor_id, vendor in list(self.Library.items()):
             groups = []
             children_dict = {}
-            for group_type, group in vendor["groups"].iteritems():
+            for group_type, group in list(vendor["groups"].items()):
                 group_infos = {"name": group["name"],
                                "order": group["order"],
                                "type": ETHERCAT_GROUP,
@@ -296,7 +593,7 @@ for mapping needed location variables
                         group_infos["children"].append(device_infos)
                         device_type_occurrences = device_dict.setdefault(device_type, [])
                         device_type_occurrences.append(device_infos)
-                for device_type_occurrences in device_dict.itervalues():
+                for device_type_occurrences in list(device_dict.values()):
                     if len(device_type_occurrences) > 1:
                         for occurrence in device_type_occurrences:
                             occurrence["name"] += _(" (rev. %s)") % occurrence["infos"]["revision_number"]
@@ -311,7 +608,7 @@ for mapping needed location variables
                                 "type": ETHERCAT_VENDOR,
                                 "infos": None,
                                 "children": groups})
-        library.sort(lambda x, y: cmp(x["name"], y["name"]))
+        library.sort(key=lambda x: x['name'])
         return library
 
     def GetVendors(self):
@@ -321,16 +618,28 @@ for mapping needed location variables
         vendor = ExtractHexDecValue(module_infos["vendor"])
         vendor_infos = self.Library.get(vendor)
         if vendor_infos is not None:
-            for _group_name, group_infos in vendor_infos["groups"].iteritems():
+            for _group_name, group_infos in list(vendor_infos["groups"].items()):
                 for device_type, device_infos in group_infos["devices"]:
                     product_code = ExtractHexDecValue(device_infos.getType().getProductCode())
                     revision_number = ExtractHexDecValue(device_infos.getType().getRevisionNo())
                     if product_code == ExtractHexDecValue(module_infos["product_code"]) and \
-                       revision_number == ExtractHexDecValue(module_infos["revision_number"]):
+                            revision_number == ExtractHexDecValue(module_infos["revision_number"]):
                         self.cntdevice = device_infos
                         self.cntdeviceType = device_type
                         return device_infos, self.GetModuleExtraParams(vendor, product_code, revision_number)
         return None, None
+
+    # add jblee for MDP
+    def GetMDPInfos(self, module_infos):
+        vendor = ExtractHexDecValue(module_infos["vendor"])
+        vendor_infos = self.Library.get(vendor)
+        if vendor_infos is not None:
+            for group_name, group_infos in list(vendor_infos["groups"].items()):
+                return group_infos["modules"]
+                # for device_type, module_list, idx_inc, slot_inc in group_infos["modules"]:
+                #    return module_list, idx_inc, slot_inc
+
+        # return None, None, None
 
     def ImportModuleLibrary(self, filepath):
         if os.path.isfile(filepath):
@@ -368,7 +677,7 @@ for mapping needed location variables
         extra_params = [param for param, _params_infos in self.MODULES_EXTRA_PARAMS]
         writer = csv.writer(csvfile, delimiter=';')
         writer.writerow(['Vendor', 'product_code', 'revision_number'] + extra_params)
-        for (vendor, product_code, revision_number), module_extra_params in self.ModulesExtraParams.iteritems():
+        for (vendor, product_code, revision_number), module_extra_params in list(self.ModulesExtraParams.items()):
             writer.writerow([vendor, product_code, revision_number] +
                             [module_extra_params.get(param, '')
                              for param in extra_params])
@@ -412,7 +721,6 @@ ModulesDatabase = ModulesLibrary(
 
 
 class RootClass(object):
-
     CTNChildrenTypes = [("EthercatNode", _EthercatCTN, "Ethercat Master")]
     EditorType = LibraryEditor
 
@@ -435,7 +743,7 @@ class RootClass(object):
         return True
 
     def CTNGenerate_C(self, buildpath, locations):
-        return [], "", False
+        return [], "", False, []
 
     def LoadModulesLibrary(self):
         if self.ModulesLibrary is None:
@@ -452,8 +760,31 @@ class RootClass(object):
     def GetModulesLibrary(self, profile_filter=None):
         return self.ModulesLibrary.GetModulesLibrary(profile_filter)
 
+    # add jblee
+    def GetMDPList(self):
+        return self.ModulesLibrary.GetMDPList()
+
+    # add jblee
+    def GetSelectModule(self, idx):
+        return self.ModulesLibrary.GetSelectModule(idx)
+
+    # add jblee
+    def GetModuleEntryList(self):
+        return self.ModulesLibrary.GetModuleEntryList()
+
+    # add jblee
+    def GetModuleIncrement(self):
+        return self.ModulesLibrary.GetModuleIncrement()
+
+    # add jblee
+    # def GetEntriesList(self, limits = None):
+    #    return self.ModulesLibrary.GetEntriesList()
+
     def GetVendors(self):
         return self.ModulesLibrary.GetVendors()
 
     def GetModuleInfos(self, module_infos):
         return self.ModulesLibrary.GetModuleInfos(module_infos)
+
+    def GetMDPInfos(self, module_infos):
+        return self.ModulesLibrary.GetMDPInfos(module_infos)

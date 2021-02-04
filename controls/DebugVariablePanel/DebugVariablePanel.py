@@ -21,21 +21,17 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
-
-from __future__ import absolute_import
-from __future__ import division
-from functools import reduce
-import numpy
-
-import wx
-import wx.lib.buttons
-
+'''
+@todo : 监控表
+@todo:调试变量名称长度限制
+'''
 
 # pylint: disable=wrong-import-position
+
 import matplotlib
-matplotlib.use('WX')   # noqa
-import matplotlib.pyplot
+import wx.lib.buttons
+
+matplotlib.use('WX')  # noqa
 
 from editors.DebugViewer import DebugViewer
 from util.BitmapLibrary import GetBitmap
@@ -44,12 +40,11 @@ from controls.DebugVariablePanel.DebugVariableItem import DebugVariableItem
 from controls.DebugVariablePanel.DebugVariableTextViewer import DebugVariableTextViewer
 from controls.DebugVariablePanel.DebugVariableGraphicViewer import *
 
-
-MILLISECOND = 1000000        # Number of nanosecond in a millisecond
+MILLISECOND = 1000000  # Number of nanosecond in a millisecond
 SECOND = 1000 * MILLISECOND  # Number of nanosecond in a second
-MINUTE = 60 * SECOND         # Number of nanosecond in a minute
-HOUR = 60 * MINUTE           # Number of nanosecond in a hour
-DAY = 24 * HOUR              # Number of nanosecond in a day
+MINUTE = 60 * SECOND  # Number of nanosecond in a minute
+HOUR = 60 * MINUTE  # Number of nanosecond in a hour
+DAY = 24 * HOUR  # Number of nanosecond in a day
 
 # Scrollbar increment in pixel
 SCROLLBAR_UNIT = 10
@@ -57,7 +52,7 @@ SCROLLBAR_UNIT = 10
 
 def compute_mask(x, y):
     return [(xp if xp == yp else "*")
-            for xp, yp in zip(x, y)]
+            for xp, yp in list(zip(x, y))]
 
 
 def NextTick(variables):
@@ -71,6 +66,7 @@ def NextTick(variables):
                      else min(next_tick, data[0][0]))
 
     return next_tick
+
 
 # -------------------------------------------------------------------------------
 #                    Debug Variable Graphic Panel Drop Target
@@ -145,6 +141,7 @@ class DebugVariableDropTarget(wx.TextDropTarget):
             # Drag'n Drop was initiated by another control of Beremiz
             else:
                 self.ParentWindow.InsertValue(values[0], force=True)
+        return True
 
     def OnLeave(self):
         """
@@ -206,9 +203,9 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
         main_sizer = wx.BoxSizer(wx.VERTICAL)
 
         self.Ticks = numpy.array([])  # List of tick received
-        self.StartTick = 0            # Tick starting range of data displayed
-        self.Fixed = False            # Flag that range of data is fixed
-        self.CursorTick = None        # Tick of cursor for displaying values
+        self.StartTick = 0  # Tick starting range of data displayed
+        self.Fixed = False  # Flag that range of data is fixed
+        self.CursorTick = None  # Tick of cursor for displaying values
 
         self.DraggingAxesPanel = None
         self.DraggingAxesBoundingBox = None
@@ -220,16 +217,16 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
         self.GraphicPanels = []
 
         graphics_button_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        main_sizer.AddSizer(graphics_button_sizer, border=5, flag=wx.GROW | wx.ALL)
+        main_sizer.Add(graphics_button_sizer, border=5, flag=wx.GROW | wx.ALL)
 
         range_label = wx.StaticText(self, label=_('Range:'))
-        graphics_button_sizer.AddWindow(range_label, flag=wx.ALIGN_CENTER_VERTICAL)
+        graphics_button_sizer.Add(range_label, flag=wx.ALIGN_CENTER_VERTICAL)
 
         self.CanvasRange = wx.ComboBox(self, style=wx.CB_READONLY)
         self.Bind(wx.EVT_COMBOBOX, self.OnRangeChanged, self.CanvasRange)
-        graphics_button_sizer.AddWindow(self.CanvasRange, 1,
-                                        border=5,
-                                        flag=wx.LEFT | wx.ALIGN_CENTER_VERTICAL)
+        graphics_button_sizer.Add(self.CanvasRange, 1,
+                                  border=5,
+                                  flag=wx.LEFT | wx.ALIGN_CENTER_VERTICAL)
 
         self.CanvasRange.Clear()
         default_range_idx = 0
@@ -240,15 +237,17 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
         self.CanvasRange.SetSelection(default_range_idx)
 
         for name, bitmap, help in [
-                ("CurrentButton",     "current",      _("Go to current value")),
-                ("ExportGraphButton", "export_graph", _("Export graph values to clipboard"))]:
+            ("CurrentButton", "current", _("Go to current value")),
+            ("LoadButton", "open", _("load vars")),
+            ("SaveButton", "save", _("save vars")),
+            ("ExportGraphButton", "export_graph", _("Export graph values to clipboard"))]:
             button = wx.lib.buttons.GenBitmapButton(
                 self, bitmap=GetBitmap(bitmap),
                 size=wx.Size(28, 28), style=wx.NO_BORDER)
-            button.SetToolTipString(help)
+            button.SetToolTip(help)
             setattr(self, name, button)
             self.Bind(wx.EVT_BUTTON, getattr(self, "On" + name), button)
-            graphics_button_sizer.AddWindow(button, border=5, flag=wx.LEFT)
+            graphics_button_sizer.Add(button, border=5, flag=wx.LEFT)
 
         self.CanvasPosition = wx.ScrollBar(
             self, size=wx.Size(0, 16), style=wx.SB_HORIZONTAL)
@@ -262,19 +261,19 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
                                  self.OnPositionChanging, self.CanvasPosition)
         self.CanvasPosition.Bind(wx.EVT_SCROLL_PAGEDOWN,
                                  self.OnPositionChanging, self.CanvasPosition)
-        main_sizer.AddWindow(self.CanvasPosition, border=5, flag=wx.GROW | wx.LEFT | wx.RIGHT | wx.BOTTOM)
+        main_sizer.Add(self.CanvasPosition, border=5, flag=wx.GROW | wx.LEFT | wx.RIGHT | wx.BOTTOM)
 
         self.TickSizer = wx.BoxSizer(wx.HORIZONTAL)
-        main_sizer.AddSizer(self.TickSizer, border=5, flag=wx.ALL | wx.GROW)
+        main_sizer.Add(self.TickSizer, border=5, flag=wx.ALL | wx.GROW)
 
         self.TickLabel = wx.StaticText(self)
-        self.TickSizer.AddWindow(self.TickLabel, border=5, flag=wx.RIGHT)
+        self.TickSizer.Add(self.TickLabel, border=5, flag=wx.RIGHT)
 
         self.MaskLabel = wx.TextCtrl(self, style=wx.TE_READONLY | wx.TE_CENTER | wx.NO_BORDER)
-        self.TickSizer.AddWindow(self.MaskLabel, 1, border=5, flag=wx.RIGHT | wx.GROW)
+        self.TickSizer.Add(self.MaskLabel, 1, border=5, flag=wx.RIGHT | wx.GROW)
 
         self.TickTimeLabel = wx.StaticText(self)
-        self.TickSizer.AddWindow(self.TickTimeLabel)
+        self.TickSizer.Add(self.TickTimeLabel)
 
         self.GraphicsWindow = wx.ScrolledWindow(self, style=wx.HSCROLL | wx.VSCROLL)
         self.GraphicsWindow.SetBackgroundColour(wx.WHITE)
@@ -283,7 +282,7 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
         self.GraphicsWindow.Bind(wx.EVT_SIZE, self.OnGraphicsWindowResize)
         self.GraphicsWindow.Bind(wx.EVT_MOUSEWHEEL, self.OnGraphicsWindowMouseWheel)
 
-        main_sizer.AddWindow(self.GraphicsWindow, 1, flag=wx.GROW)
+        main_sizer.Add(self.GraphicsWindow, 1, flag=wx.GROW)
 
         self.GraphicsSizer = wx.BoxSizer(wx.VERTICAL)
         self.GraphicsWindow.SetSizer(self.GraphicsSizer)
@@ -307,7 +306,7 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
 
         # Calculate range to apply to data
         self.CurrentRange = self.RANGE_VALUES[
-            self.CanvasRange.GetSelection()][1] // self.Ticktime
+                                self.CanvasRange.GetSelection()][1] // self.Ticktime
 
     def SetDataProducer(self, producer):
         """
@@ -357,7 +356,7 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
             # Force refresh if graph is fixed because range of data received
             # is too small to fill data range selected
             if self.Fixed and \
-               self.Ticks[-1] - self.Ticks[0] < self.CurrentRange:
+                    self.Ticks[-1] - self.Ticks[0] < self.CurrentRange:
                 self.Force = True
 
             self.HasNewData = False
@@ -437,9 +436,9 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
             x, y = panel.GetPosition()
             width, height = panel.GetSize()
             rect = wx.Rect(x, y, width, height)
-            if rect.InsideXY(x_mouse, y_mouse) or \
-               idx == 0 and y_mouse < 0 or \
-               idx == len(self.GraphicPanels) - 1 and y_mouse > panel.GetPosition()[1]:
+            if rect.Contains(x_mouse, y_mouse) or \
+                    idx == 0 and y_mouse < 0 or \
+                    idx == len(self.GraphicPanels) - 1 and y_mouse > panel.GetPosition()[1]:
                 panel.RefreshHighlight(x_mouse - x, y_mouse - y)
             else:
                 panel.SetHighlight(HIGHLIGHT_NONE)
@@ -484,7 +483,7 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
             xw, yw = panel.GetPosition()
             width, height = panel.GetSize()
             bbox = wx.Rect(xw, yw, width, height)
-            if bbox.InsideXY(x_mouse, y_mouse):
+            if bbox.Contains(x_mouse, y_mouse):
                 panel.ShowButtons(True)
                 merge_type = GRAPH_PARALLEL
                 if isinstance(panel, DebugVariableTextViewer) or panel.Is3DCanvas():
@@ -493,9 +492,9 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
                     wx.CallAfter(self.MoveValue, variable, idx, True)
                 else:
                     rect = panel.GetAxesBoundingBox(True)
-                    if rect.InsideXY(x_mouse, y_mouse):
+                    if rect.Contains(x_mouse, y_mouse):
                         merge_rect = wx.Rect(rect.x, rect.y, rect.width // 2, rect.height)
-                        if merge_rect.InsideXY(x_mouse, y_mouse):
+                        if merge_rect.Contains(x_mouse, y_mouse):
                             merge_type = GRAPH_ORTHOGONAL
                         wx.CallAfter(self.MergeGraphs, variable, idx, merge_type, force=True)
                     else:
@@ -506,7 +505,7 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
                 return
         width, height = self.GraphicsWindow.GetVirtualSize()
         rect = wx.Rect(0, 0, width, height)
-        if rect.InsideXY(x_mouse, y_mouse):
+        if rect.Contains(x_mouse, y_mouse):
             wx.CallAfter(self.MoveValue, variable, len(self.GraphicPanels), True)
         self.ForceRefresh()
 
@@ -514,7 +513,7 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
         self.GraphicsSizer.Clear()
 
         for panel in self.GraphicPanels:
-            self.GraphicsSizer.AddWindow(panel, flag=wx.GROW)
+            self.GraphicsSizer.Add(panel, flag=wx.GROW)
 
         self.GraphicsSizer.Layout()
         self.RefreshGraphicsWindowScrollbars()
@@ -659,6 +658,34 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
             self.ResetCursorTick()
         event.Skip()
 
+    def OnLoadButton(self, event):
+        prj = self.ParentWindow.CTR.GetProjectPath()
+        dialog = wx.FileDialog(self.ParentWindow,
+                               _("Choose an DBG file"),
+                               prj, "",
+                               _("Debug var files (*.dbg)|*.dbg"),
+                               wx.FD_OPEN)
+        if dialog.ShowModal() == wx.ID_OK:
+            filepath = dialog.GetPath()
+            with open(filepath, 'r', encoding='utf-8') as f:
+                for line in f.readlines():
+                    line = line.strip()
+                    self.InsertValue(line)
+        event.Skip()
+
+    def OnSaveButton(self, event):
+        prj = self.ParentWindow.CTR.GetProjectPath()
+        dialog = wx.FileDialog(self, _("Choose a file"), prj, "", _("Debug var files (*.dbg)|*.dbg"),
+                               wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
+        if dialog.ShowModal() == wx.ID_OK:
+            filepath = dialog.GetPath()
+            with open(filepath, 'w', encoding='utf-8') as f:
+                for panel in self.GraphicPanels:
+                    for item in panel.ItemsDict.keys():
+                        f.write(item)
+                        f.write('\n')
+        event.Skip()
+
     def CopyDataToClipboard(self, variables):
         text = "tick;%s;\n" % ";".join([item.GetVariable() for item, data in variables])
         next_tick = NextTick(variables)
@@ -718,7 +745,7 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
         idx = self.GetViewerIndex(viewer)
         if idx is None:
             return
-        self.GraphicPanels[idx-1].SetHighlight(HIGHLIGHT_AFTER)
+        self.GraphicPanels[idx - 1].SetHighlight(HIGHLIGHT_AFTER)
 
     def ResetVariableNameMask(self):
         items = []
@@ -836,9 +863,9 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
             graph_type = target_panel.GraphType
             if target_panel != source_panel:
                 if merge_type == GRAPH_PARALLEL and graph_type != merge_type or \
-                   merge_type == GRAPH_ORTHOGONAL and (
-                           graph_type == GRAPH_PARALLEL and len(target_panel.Items) > 1 or
-                           graph_type == GRAPH_ORTHOGONAL and len(target_panel.Items) >= 3):
+                        merge_type == GRAPH_ORTHOGONAL and (
+                        graph_type == GRAPH_PARALLEL and len(target_panel.Items) > 1 or
+                        graph_type == GRAPH_ORTHOGONAL and len(target_panel.Items) >= 3):
                     return
 
                 if source_panel is not None:
@@ -854,7 +881,7 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
                 target_panel = None
 
             if target_panel is not None:
-                target_panel.AddItem(source_item)
+                target_panel.Add(source_item)
                 target_panel.GraphType = merge_type
                 size = target_panel.GetSize()
                 if merge_type == GRAPH_ORTHOGONAL:
@@ -937,8 +964,8 @@ class DebugVariablePanel(wx.Panel, DebugViewer):
         for panel in self.GraphicPanels:
             panel_size = panel.GetSize()
             if isinstance(panel, DebugVariableGraphicViewer) and \
-               panel.GraphType == GRAPH_ORTHOGONAL and \
-               panel_size.width == panel_size.height:
+                    panel.GraphType == GRAPH_ORTHOGONAL and \
+                    panel_size.width == panel_size.height:
                 panel.SetCanvasHeight(size.width)
         self.RefreshGraphicsWindowScrollbars()
         self.GraphicsSizer.Layout()

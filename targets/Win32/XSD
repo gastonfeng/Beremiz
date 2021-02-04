@@ -1,7 +1,7 @@
 
                   <xsd:element name="Win32">
                     <xsd:complexType>
-                      %(toolchain_gcc)s
+                      %(toolchain_pio)s
                     </xsd:complexType>
                   </xsd:element>
 

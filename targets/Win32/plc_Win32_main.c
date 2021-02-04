@@ -8,7 +8,8 @@
 #include <windows.h>
 #include <locale.h>
 
-
+extern "C"
+{
 long AtomicCompareExchange(long* atomicvar, long compared, long exchange)
 {
     return InterlockedCompareExchange(atomicvar, exchange, compared);
@@ -78,7 +79,7 @@ HANDLE python_sem;
 HANDLE python_wait_sem;
 
 #define maxval(a,b) ((a>b)?a:b)
-int startPLC(int argc,char **argv)
+int startPLC()
 {
 	unsigned long thread_id = 0;
     BOOL tmp;
@@ -140,7 +141,7 @@ int startPLC(int argc,char **argv)
         printf("CreateWaitableTimer failed (%d)\n", GetLastError());
         return 1;
     }
-    if( __init(argc,argv) == 0 )
+    if( __init() == 0 )
     {
         PLC_SetTimer(common_ticktime__,common_ticktime__);
         PLC_thread = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)PlcLoop, NULL, 0, &thread_id);
@@ -262,3 +263,11 @@ beremiz_dll_destroy(void)
     DeleteCriticalSection(&Atomic64CS);
 }
 
+}
+int sys_read_outwords(unsigned short, unsigned short, unsigned short*){
+return -1;
+}
+int sys_write_outwords(unsigned short, unsigned short, unsigned short*)
+{
+return -1;
+}

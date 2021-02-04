@@ -24,10 +24,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
 from os.path import join
-import util.paths as paths
+
+from util import paths
 from util.TranslationCatalogs import NoTranslate
+
 sd = paths.AbsDir(__file__)
 
 # Override gettext _ in this module
@@ -47,8 +48,9 @@ LOCATIONDATATYPES = {"X": ["BOOL"],
 #                        Function Block Types definitions
 # -------------------------------------------------------------------------------
 
-StdTC6Libs = [(_("Standard function blocks"),   join(sd, "Standard_Function_Blocks.xml")),
-              (_("Additional function blocks"), join(sd, "Additional_Function_Blocks.xml"))]
+StdTC6Libs = [(_("Standard function blocks"), join(sd, "Standard_Function_Blocks.xml")),
+              (_("Additional function blocks"), join(sd, "Additional_Function_Blocks.xml")),
+              (_("Motion funcction blocks"), join(sd, "Motion_Function_Blocks.xml"))]
 
 StdFuncsCSV = join(sd, "iec_std.csv")
 
@@ -61,6 +63,7 @@ def GetBlockInfos(pou):
         else (var_name, var_type, var_modifier)
         for var_name, var_type, var_modifier in infos["inputs"]]
     return infos
+
 
 # -------------------------------------------------------------------------------
 #                           Data Types definitions
@@ -111,14 +114,14 @@ TypeHierarchy_list = [
 DefaultType = "DINT"
 
 DataTypeRange_list = [
-    ("SINT",  (-2**7,  2**7 - 1)),
-    ("INT",   (-2**15, 2**15 - 1)),
-    ("DINT",  (-2**31, 2**31 - 1)),
-    ("LINT",  (-2**63, 2**63 - 1)),
-    ("USINT", (0,      2**8 - 1)),
-    ("UINT",  (0,      2**16 - 1)),
-    ("UDINT", (0,      2**32 - 1)),
-    ("ULINT", (0,      2**64 - 1))
+    ("SINT", (-2 ** 7, 2 ** 7 - 1)),
+    ("INT", (-2 ** 15, 2 ** 15 - 1)),
+    ("DINT", (-2 ** 31, 2 ** 31 - 1)),
+    ("LINT", (-2 ** 63, 2 ** 63 - 1)),
+    ("USINT", (0, 2 ** 8 - 1)),
+    ("UINT", (0, 2 ** 16 - 1)),
+    ("UDINT", (0, 2 ** 32 - 1)),
+    ("ULINT", (0, 2 ** 64 - 1))
 ]
 
 ANY_TO_ANY_FILTERS = {
@@ -132,18 +135,18 @@ ANY_TO_ANY_FILTERS = {
         (("ANY_REAL",), ("ANY_BIT",)),
         # TO_TIME
         (("ANY_INT", "ANY_BIT"), ("ANY_DATE", "TIME")),
-        (("ANY_REAL",),          ("ANY_DATE", "TIME")),
-        (("ANY_STRING",),        ("ANY_DATE", "TIME")),
+        (("ANY_REAL",), ("ANY_DATE", "TIME")),
+        (("ANY_STRING",), ("ANY_DATE", "TIME")),
         # FROM_TIME
         (("ANY_DATE", "TIME"), ("ANY_REAL",)),
         (("ANY_DATE", "TIME"), ("ANY_INT", "ANY_NBIT")),
         (("TIME",), ("ANY_STRING",)),
         (("DATE",), ("ANY_STRING",)),
-        (("TOD",),  ("ANY_STRING",)),
-        (("DT",),   ("ANY_STRING",)),
+        (("TOD",), ("ANY_STRING",)),
+        (("DT",), ("ANY_STRING",)),
         # TO_STRING
-        (("BOOL",),     ("ANY_STRING",)),
-        (("ANY_BIT",),  ("ANY_STRING",)),
+        (("BOOL",), ("ANY_STRING",)),
+        (("ANY_BIT",), ("ANY_STRING",)),
         (("ANY_REAL",), ("ANY_STRING",)),
         (("ANY_SINT",), ("ANY_STRING",)),
         (("ANY_UINT",), ("ANY_STRING",)),
@@ -155,14 +158,14 @@ ANY_TO_ANY_FILTERS = {
         (("ANY_STRING",), ("ANY_REAL",))
     ],
     "BCD_TO_ANY": [
-        (("BYTE",),  ("USINT",)),
-        (("WORD",),  ("UINT",)),
+        (("BYTE",), ("USINT",)),
+        (("WORD",), ("UINT",)),
         (("DWORD",), ("UDINT",)),
         (("LWORD",), ("ULINT",))
     ],
     "ANY_TO_BCD": [
         (("USINT",), ("BYTE",)),
-        (("UINT",),  ("WORD",)),
+        (("UINT",), ("WORD",)),
         (("UDINT",), ("DWORD",)),
         (("ULINT",), ("LWORD",))
     ]

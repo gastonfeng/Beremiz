@@ -23,20 +23,22 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
+
+import operator
 import os
 
 import wx
-from six.moves import xrange
 
 from util.BitmapLibrary import GetBitmap
+
+# from six.moves import range
 
 DRIVE, FOLDER, FILE = range(3)
 
 
 def sort_folder(x, y):
     if x[1] == y[1]:
-        return cmp(x[0], y[0])
+        return operator.eq(x[0], y[0])
     elif x[1] != FILE:
         return -1
     else:
@@ -74,12 +76,12 @@ class FolderTree(wx.Panel):
         self.Bind(wx.EVT_TREE_ITEM_COLLAPSED, self.OnTreeItemCollapsed, self.Tree)
         self.Bind(wx.EVT_TREE_BEGIN_LABEL_EDIT, self.OnTreeBeginLabelEdit, self.Tree)
         self.Bind(wx.EVT_TREE_END_LABEL_EDIT, self.OnTreeEndLabelEdit, self.Tree)
-        main_sizer.AddWindow(self.Tree, 1, flag=wx.GROW)
+        main_sizer.Add(self.Tree, 1, flag=wx.GROW)
 
         if filter is not None:
             self.Filter = wx.ComboBox(self, style=wx.CB_READONLY)
             self.Bind(wx.EVT_COMBOBOX, self.OnFilterChanged, self.Filter)
-            main_sizer.AddWindow(self.Filter, flag=wx.GROW)
+            main_sizer.Add(self.Filter, flag=wx.GROW)
         else:
             self.Filter = None
 
@@ -99,7 +101,7 @@ class FolderTree(wx.Panel):
         self.Filters = {}
         if self.Filter is not None:
             filter_parts = filter.split("|")
-            for idx in xrange(0, len(filter_parts), 2):
+            for idx in list(range(0, len(filter_parts), 2)):
                 if filter_parts[idx + 1] == "*.*":
                     self.Filters[filter_parts[idx]] = ""
                 else:
@@ -115,10 +117,10 @@ class FolderTree(wx.Panel):
     def _GetFolderChildren(self, folderpath, recursive=True):
         items = []
         if wx.Platform == '__WXMSW__' and folderpath == "/":
-            for c in xrange(ord('a'), ord('z')):
+            for c in list(range(ord('a'), ord('z'))):
                 drive = os.path.join("%s:\\" % chr(c))
                 if os.path.exists(drive):
-                    items.append((drive, DRIVE, self._GetFolderChildren(drive, False)))
+                    items.append((drive, DRIVE, len(self._GetFolderChildren(drive, False))))
         else:
             try:
                 files = os.listdir(folderpath)
@@ -137,7 +139,7 @@ class FolderTree(wx.Panel):
                           os.path.splitext(filename)[1] == self.CurrentFilter):
                         items.append((filename, FILE, None))
         if recursive:
-            items.sort(sort_folder)
+            items.sort()
         return items
 
     def SetFilter(self, filter):
@@ -160,7 +162,7 @@ class FolderTree(wx.Panel):
                 if wx.Platform != '__WXMSW__':
                     item, item_cookie = self.Tree.GetNextChild(root, item_cookie)
             elif self.Tree.GetItemText(item) != filename:
-                item = self.Tree.InsertItemBefore(root, idx, filename, self.TreeImageDict[item_type])
+                item = self.Tree.InsertItem(root, idx, filename, self.TreeImageDict[item_type])
             filepath = os.path.join(folderpath, filename)
             if item_type != FILE:
                 if self.Tree.IsExpanded(item):
@@ -222,7 +224,7 @@ class FolderTree(wx.Panel):
                                                _("File '%s' already exists!") % new_name,
                                                _("Error"), wx.OK | wx.ICON_ERROR)
                     message.ShowModal()
-                    message.Destroy()
+                    # message.Destroy()
                     event.Veto()
         else:
             event.Skip()

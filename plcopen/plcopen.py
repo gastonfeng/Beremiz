@@ -24,43 +24,38 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
-from __future__ import division
+
 import re
 from collections import OrderedDict
 
-from six.moves import xrange
 from lxml import etree
 
+from util import paths
 from xmlclass import *
-import util.paths as paths
-
 
 #: Dictionary that makes the relation between var names
 #: in plcopen and displayed values
 
 VarTypes = {
-    "Local":    "localVars",
-    "Temp":     "tempVars",
-    "Input":    "inputVars",
-    "Output":   "outputVars",
-    "InOut":    "inOutVars",
+    "Local": "localVars",
+    "Temp": "tempVars",
+    "Input": "inputVars",
+    "Output": "outputVars",
+    "InOut": "inOutVars",
     "External": "externalVars",
-    "Global":   "globalVars",
-    "Access":   "accessVars"
+    "Global": "globalVars",
+    "Access": "accessVars"
 }
 
 searchResultVarTypes = {
-    "inputVars":  "var_input",
+    "inputVars": "var_input",
     "outputVars": "var_output",
-    "inOutVars":  "var_inout"
+    "inOutVars": "var_inout"
 }
-
 
 #: Define in which order var types must be displayed
 
 VarOrder = ["Local", "Temp", "Input", "Output", "InOut", "External", "Global", "Access"]
-
 
 #:  Define which action qualifier must be associated with a duration
 
@@ -76,7 +71,6 @@ QualifierList = OrderedDict([
     ("SD", True),
     ("DS", True),
     ("SL", True)])
-
 
 FILTER_ADDRESS_MODEL = r"(%%[IQM](?:[XBWDL])?)(%s)((?:\.[0-9]+)*)"
 
@@ -183,9 +177,9 @@ LOAD_POU_PROJECT_TEMPLATE = """
               creationDateTime="1970-01-01T00:00:00"/>
   <contentHeader name="paste_project">
     <coordinateInfo>
-      <fbd><scaling x="0" y="0"/></fbd>
-      <ld><scaling x="0" y="0"/></ld>
-      <sfc><scaling x="0" y="0"/></sfc>
+      <fbd><scaling x="10" y="10" showDoc="1"/></fbd>
+      <ld><scaling x="10" y="10" showDoc="1"/></ld>
+      <sfc><scaling x="10" y="10" showDoc="1"/></sfc>
     </coordinateInfo>
   </contentHeader>
   <types>
@@ -214,7 +208,7 @@ PLCOpen_v1_file.close()
 PLCOpen_v1_xml = PLCOpen_v1_xml.replace(
     "http://www.plcopen.org/xml/tc6.xsd",
     "http://www.plcopen.org/xml/tc6_0201")
-PLCOpen_v1_xsd = etree.XMLSchema(etree.fromstring(PLCOpen_v1_xml))
+PLCOpen_v1_xsd = etree.XMLSchema(etree.fromstring(PLCOpen_v1_xml.encode()))
 
 # XPath for file compatibility process
 ProjectResourcesXPath = PLCOpen_XPath("ppx:instances/ppx:configurations/ppx:configuration/ppx:resource")
@@ -230,8 +224,8 @@ def LoadProjectXML(project_xml):
         "http://www.plcopen.org/xml/tc6.xsd",
         "http://www.plcopen.org/xml/tc6_0201")
     for cre, repl in [
-            (re.compile(r"(?<!<xhtml:p>)(?:<!\[CDATA\[)"), "<xhtml:p><![CDATA["),
-            (re.compile(r"(?:]]>)(?!</xhtml:p>)"), "]]></xhtml:p>")]:
+        (re.compile(r"(?<!<xhtml:p>)(?:<!\[CDATA\[)"), "<xhtml:p><![CDATA["),
+        (re.compile(r"(?:]]>)(?!</xhtml:p>)"), "]]></xhtml:p>")]:
         project_xml = cre.sub(repl, project_xml)
 
     try:
@@ -304,7 +298,7 @@ def LoadProjectXML(project_xml):
 
 
 def LoadProject(filepath):
-    project_file = open(filepath)
+    project_file = open(filepath, encoding='utf-8')
     project_xml = project_file.read()
     project_file.close()
     return LoadProjectXML(project_xml)
@@ -331,12 +325,14 @@ def LoadPouInstances(xml_string, body_type):
 
 
 def SaveProject(project, filepath):
-    project_file = open(filepath, 'w')
-    project_file.write(etree.tostring(
+    project_file = open(filepath, 'w', encoding='utf-8')
+    txt = etree.tostring(
         project,
         pretty_print=True,
         xml_declaration=True,
-        encoding='utf-8'))
+        encoding='utf-8').decode()
+
+    project_file.write(txt)
     project_file.close()
 
 
@@ -349,6 +345,7 @@ def _updateFormattedTextClass(cls):
         pattern = re.compile('\\b' + old_name + '\\b', re.IGNORECASE)
         text = pattern.sub(new_name, text)
         self.setanyText(text)
+
     setattr(cls, "updateElementName", updateElementName)
 
     def updateElementAddress(self, address_model, new_leading):
@@ -362,16 +359,19 @@ def _updateFormattedTextClass(cls):
             startpos = result.start() + len(new_address)
             result = address_model.search(text, startpos)
         self.setanyText(text)
+
     setattr(cls, "updateElementAddress", updateElementAddress)
 
     def hasblock(self, block_type):
         text = self.getanyText()
         pattern = re.compile('\\b' + block_type + '\\b', re.IGNORECASE)
         return pattern.search(text) is not None
+
     setattr(cls, "hasblock", hasblock)
 
     def Search(self, criteria, parent_infos):
         return [(tuple(parent_infos),) + result for result in TestTextElement(self.getanyText(), criteria)]
+
     setattr(cls, "Search", Search)
 
 
@@ -386,10 +386,12 @@ if cls:
 def _updateProjectClass(cls):
     def setname(self, name):
         self.contentHeader.setname(name)
+
     setattr(cls, "setname", setname)
 
     def getname(self):
         return self.contentHeader.getname()
+
     setattr(cls, "getname", getname)
 
     def getfileHeader(self):
@@ -397,14 +399,15 @@ def _updateProjectClass(cls):
         return {
             attr: value if value is not None else ""
             for attr, value in [
-                ("companyName", fileheader_obj.getcompanyName()),
-                ("companyURL", fileheader_obj.getcompanyURL()),
-                ("productName", fileheader_obj.getproductName()),
-                ("productVersion", fileheader_obj.getproductVersion()),
-                ("productRelease", fileheader_obj.getproductRelease()),
-                ("creationDateTime", fileheader_obj.getcreationDateTime()),
-                ("contentDescription", fileheader_obj.getcontentDescription())]
+            ("companyName", fileheader_obj.getcompanyName()),
+            ("companyURL", fileheader_obj.getcompanyURL()),
+            ("productName", fileheader_obj.getproductName()),
+            ("productVersion", fileheader_obj.getproductVersion()),
+            ("productRelease", fileheader_obj.getproductRelease()),
+            ("creationDateTime", fileheader_obj.getcreationDateTime()),
+            ("contentDescription", fileheader_obj.getcontentDescription())]
         }
+
     setattr(cls, "getfileHeader", getfileHeader)
 
     def setfileHeader(self, fileheader):
@@ -415,6 +418,7 @@ def _updateProjectClass(cls):
             value = fileheader.get(attr)
             if value is not None:
                 setattr(fileheader_obj, attr, value)
+
     setattr(cls, "setfileHeader", setfileHeader)
 
     def getcontentHeader(self):
@@ -422,21 +426,22 @@ def _updateProjectClass(cls):
         contentheader = {
             attr: value if value is not None else ""
             for attr, value in [
-                ("projectName", contentheader_obj.getname()),
-                ("projectVersion", contentheader_obj.getversion()),
-                ("modificationDateTime", contentheader_obj.getmodificationDateTime()),
-                ("organization", contentheader_obj.getorganization()),
-                ("authorName", contentheader_obj.getauthor()),
-                ("language", contentheader_obj.getlanguage())]
+            ("projectName", contentheader_obj.getname()),
+            ("projectVersion", contentheader_obj.getversion()),
+            ("modificationDateTime", contentheader_obj.getmodificationDateTime()),
+            ("organization", contentheader_obj.getorganization()),
+            ("authorName", contentheader_obj.getauthor()),
+            ("language", contentheader_obj.getlanguage())]
         }
         contentheader["pageSize"] = self.contentHeader.getpageSize()
         contentheader["scaling"] = self.contentHeader.getscaling()
         return contentheader
+
     setattr(cls, "getcontentHeader", getcontentHeader)
 
     def setcontentHeader(self, contentheader):
         contentheader_obj = self.contentHeader
-        for attr, value in contentheader.iteritems():
+        for attr, value in contentheader.items():
             func = {"projectName": contentheader_obj.setname,
                     "projectVersion": contentheader_obj.setversion,
                     "authorName": contentheader_obj.setauthor,
@@ -446,6 +451,7 @@ def _updateProjectClass(cls):
                 func(value)
             elif attr in ["modificationDateTime", "organization", "language"]:
                 setattr(contentheader_obj, attr, value)
+
     setattr(cls, "setcontentHeader", setcontentHeader)
 
     def gettypeElementFunc(element_type):
@@ -457,6 +463,7 @@ def _updateProjectClass(cls):
             if len(elements) == 1:
                 return elements[0]
             return None
+
         return gettypeElement
 
     datatypes_xpath = PLCOpen_XPath("ppx:types/ppx:dataTypes/ppx:dataType")
@@ -467,6 +474,7 @@ def _updateProjectClass(cls):
         if exclude is not None:
             return filtered_datatypes_xpath(self, exclude=exclude)
         return datatypes_xpath(self)
+
     setattr(cls, "getdataTypes", getdataTypes)
 
     setattr(cls, "getdataType", gettypeElementFunc("dataType"))
@@ -475,14 +483,17 @@ def _updateProjectClass(cls):
         if self.getdataType(name) is not None:
             raise ValueError("\"%s\" Data Type already exists !!!" % name)
         self.types.appenddataTypeElement(name)
+
     setattr(cls, "appenddataType", appenddataType)
 
     def insertdataType(self, index, datatype):
         self.types.insertdataTypeElement(index, datatype)
+
     setattr(cls, "insertdataType", insertdataType)
 
     def removedataType(self, name):
         self.types.removedataTypeElement(name)
+
     setattr(cls, "removedataType", removedataType)
 
     def getpous(self, exclude=None, filter=None):
@@ -491,23 +502,27 @@ def _updateProjectClass(cls):
             "ppx:types/ppx:pous/ppx:pou%s%s" %
             (("[@name!='%s']" % exclude) if exclude is not None else '',
              ("[%s]" % " or ".join(
-                 map(lambda x: "@pouType='%s'" % x, filter)))
+                 list(map(lambda x: "@pouType='%s'" % x, filter))))
              if len(filter) > 0 else ""),
             namespaces=PLCOpenParser.NSMAP)
+
     setattr(cls, "getpous", getpous)
 
     setattr(cls, "getpou", gettypeElementFunc("pou"))
 
     def appendpou(self, name, pou_type, body_type):
         self.types.appendpouElement(name, pou_type, body_type)
+
     setattr(cls, "appendpou", appendpou)
 
     def insertpou(self, index, pou):
         self.types.insertpouElement(index, pou)
+
     setattr(cls, "insertpou", insertpou)
 
     def removepou(self, name):
         self.types.removepouElement(name)
+
     setattr(cls, "removepou", removepou)
 
     configurations_xpath = PLCOpen_XPath(
@@ -515,6 +530,7 @@ def _updateProjectClass(cls):
 
     def getconfigurations(self):
         return configurations_xpath(self)
+
     setattr(cls, "getconfigurations", getconfigurations)
 
     configuration_xpath = PLCOpen_XPath(
@@ -525,6 +541,7 @@ def _updateProjectClass(cls):
         if len(configurations) == 1:
             return configurations[0]
         return None
+
     setattr(cls, "getconfiguration", getconfiguration)
 
     def addconfiguration(self, name):
@@ -533,6 +550,7 @@ def _updateProjectClass(cls):
         new_configuration = PLCOpenParser.CreateElement("configuration", "configurations")
         new_configuration.setname(name)
         self.instances.configurations.appendconfiguration(new_configuration)
+
     setattr(cls, "addconfiguration", addconfiguration)
 
     def removeconfiguration(self, name):
@@ -540,6 +558,7 @@ def _updateProjectClass(cls):
         if configuration is None:
             raise ValueError(_("\"%s\" configuration doesn't exist !!!") % name)
         self.instances.configurations.remove(configuration)
+
     setattr(cls, "removeconfiguration", removeconfiguration)
 
     resources_xpath = PLCOpen_XPath(
@@ -550,19 +569,21 @@ def _updateProjectClass(cls):
         if len(resources) == 1:
             return resources[0]
         return None
+
     setattr(cls, "getconfigurationResource", getconfigurationResource)
 
     def addconfigurationResource(self, config_name, name):
         if self.getconfigurationResource(config_name, name) is not None:
             raise ValueError(
                 _("\"{a1}\" resource already exists in \"{a2}\" configuration !!!").
-                format(a1=name, a2=config_name))
+                    format(a1=name, a2=config_name))
 
         configuration = self.getconfiguration(config_name)
         if configuration is not None:
             new_resource = PLCOpenParser.CreateElement("resource", "configuration")
             new_resource.setname(name)
             configuration.appendresource(new_resource)
+
     setattr(cls, "addconfigurationResource", addconfigurationResource)
 
     def removeconfigurationResource(self, config_name, name):
@@ -576,7 +597,7 @@ def _updateProjectClass(cls):
         if not found:
             raise ValueError(
                 _("\"{a1}\" resource doesn't exist in \"{a2}\" configuration !!!").
-                format(a1=name, a2=config_name))
+                    format(a1=name, a2=config_name))
 
     setattr(cls, "removeconfigurationResource", removeconfigurationResource)
 
@@ -587,6 +608,7 @@ def _updateProjectClass(cls):
             pou.updateElementName(old_name, new_name)
         for configuration in self.getconfigurations():
             configuration.updateElementName(old_name, new_name)
+
     setattr(cls, "updateElementName", updateElementName)
 
     def updateElementAddress(self, old_leading, new_leading):
@@ -595,6 +617,7 @@ def _updateProjectClass(cls):
             pou.updateElementAddress(address_model, new_leading)
         for configuration in self.getconfigurations():
             configuration.updateElementAddress(address_model, new_leading)
+
     setattr(cls, "updateElementAddress", updateElementAddress)
 
     def removeVariableByAddress(self, address):
@@ -602,6 +625,7 @@ def _updateProjectClass(cls):
             pou.removeVariableByAddress(address)
         for configuration in self.getconfigurations():
             configuration.removeVariableByAddress(address)
+
     setattr(cls, "removeVariableByAddress", removeVariableByAddress)
 
     def removeVariableByFilter(self, leading):
@@ -610,6 +634,7 @@ def _updateProjectClass(cls):
             pou.removeVariableByFilter(address_model)
         for configuration in self.getconfigurations():
             configuration.removeVariableByFilter(address_model)
+
     setattr(cls, "removeVariableByFilter", removeVariableByFilter)
 
     enumerated_values_xpath = PLCOpen_XPath(
@@ -617,6 +642,7 @@ def _updateProjectClass(cls):
 
     def GetEnumeratedDataTypeValues(self):
         return [value.getname() for value in enumerated_values_xpath(self)]
+
     setattr(cls, "GetEnumeratedDataTypeValues", GetEnumeratedDataTypeValues)
 
     def Search(self, criteria, parent_infos=None):
@@ -625,6 +651,7 @@ def _updateProjectClass(cls):
         for configuration in self.instances.configurations.getconfiguration():
             result.extend(configuration.Search(criteria, parent_infos))
         return result
+
     setattr(cls, "Search", Search)
 
 
@@ -639,15 +666,18 @@ if cls:
 def _updateContentHeaderProjectClass(cls):
     def setpageSize(self, width, height):
         self.coordinateInfo.setpageSize(width, height)
+
     setattr(cls, "setpageSize", setpageSize)
 
     def getpageSize(self):
         return self.coordinateInfo.getpageSize()
+
     setattr(cls, "getpageSize", getpageSize)
 
     def setscaling(self, scaling):
-        for language, (x, y) in scaling.items():
-            self.coordinateInfo.setscaling(language, x, y)
+        for language, (x, y, show) in scaling.items():
+            self.coordinateInfo.setscaling(language, x, y, show)
+
     setattr(cls, "setscaling", setscaling)
 
     def getscaling(self):
@@ -656,7 +686,23 @@ def _updateContentHeaderProjectClass(cls):
         scaling["LD"] = self.coordinateInfo.getscaling("LD")
         scaling["SFC"] = self.coordinateInfo.getscaling("SFC")
         return scaling
+
     setattr(cls, "getscaling", getscaling)
+
+    def setshowdoc(self, showdoc):
+        for language, value in showdoc:
+            self.coordinateInfo.setshowdoc(language, value)
+
+    setattr(cls, 'setshowdoc', setshowdoc)
+
+    def getshowdoc(self):
+        showdoc = {}
+        showdoc["FBD"] = self.coordinateInfo.getshowdoc("FBD")
+        showdoc["LD"] = self.coordinateInfo.getshowdoc("LD")
+        showdoc["SFC"] = self.coordinateInfo.getshowdoc("SFC")
+        return showdoc
+
+    setattr(cls, "getshowdoc", getshowdoc)
 
 
 cls = PLCOpenParser.GetElementClass("contentHeader", "project")
@@ -676,34 +722,41 @@ def _updateCoordinateInfoContentHeaderClass(cls):
                 self.addpageSize()
             self.pageSize.setx(width)
             self.pageSize.sety(height)
+
     setattr(cls, "setpageSize", setpageSize)
 
     def getpageSize(self):
         if self.pageSize is not None:
             return self.pageSize.getx(), self.pageSize.gety()
         return 0, 0
+
     setattr(cls, "getpageSize", getpageSize)
 
-    def setscaling(self, language, x, y):
+    def setscaling(self, language, x, y, show):
         if language == "FBD":
             self.fbd.scaling.setx(x)
             self.fbd.scaling.sety(y)
+            self.fbd.scaling.setshowDoc(show)
         elif language == "LD":
             self.ld.scaling.setx(x)
             self.ld.scaling.sety(y)
+            self.ld.scaling.setshowDoc(show)
         elif language == "SFC":
             self.sfc.scaling.setx(x)
             self.sfc.scaling.sety(y)
+            self.sfc.scaling.setshowDoc(show)
+
     setattr(cls, "setscaling", setscaling)
 
     def getscaling(self, language):
         if language == "FBD":
-            return self.fbd.scaling.getx(), self.fbd.scaling.gety()
+            return self.fbd.scaling.getx(), self.fbd.scaling.gety(), self.fbd.scaling.getshowDoc()
         elif language == "LD":
-            return self.ld.scaling.getx(), self.ld.scaling.gety()
+            return self.ld.scaling.getx(), self.ld.scaling.gety(), self.ld.scaling.getshowDoc()
         elif language == "SFC":
-            return self.sfc.scaling.getx(), self.sfc.scaling.gety()
+            return self.sfc.scaling.getx(), self.sfc.scaling.gety(), self.sfc.scaling.getshowDoc()
         return 0, 0
+
     setattr(cls, "getscaling", getscaling)
 
 
@@ -719,7 +772,8 @@ def _Search(attributes, criteria, parent_infos):
     search_result = []
     for attr, value in attributes:
         if value is not None:
-            search_result.extend([(tuple(parent_infos + [attr]),) + result for result in TestTextElement(value, criteria)])
+            search_result.extend(
+                [(tuple(parent_infos + [attr]),) + result for result in TestTextElement(value, criteria)])
     return search_result
 
 
@@ -745,7 +799,7 @@ def _updateConfigurationResourceElementAddress(self, address_model, new_leading)
 def _removeConfigurationResourceVariableByAddress(self, address):
     for varlist in self.getglobalVars():
         variables = varlist.getvariable()
-        for i in xrange(len(variables)-1, -1, -1):
+        for i in range(len(variables) - 1, -1, -1):
             if variables[i].getaddress() == address:
                 variables.remove(variables[i])
 
@@ -753,7 +807,7 @@ def _removeConfigurationResourceVariableByAddress(self, address):
 def _removeConfigurationResourceVariableByFilter(self, address_model):
     for varlist in self.getglobalVars():
         variables = varlist.getvariable()
-        for i in xrange(len(variables)-1, -1, -1):
+        for i in range(len(variables) - 1, -1, -1):
             var_address = variables[i].getaddress()
             if var_address is not None:
                 result = address_model.match(var_address)
@@ -773,7 +827,8 @@ def _SearchInConfigurationResource(self, criteria, parent_infos=None):
                                        ("non_retain", varlist.getnonretain())]:
             if has_modifier:
                 for result in TestTextElement(modifier, criteria):
-                    search_result.append((tuple(parent_infos + [variable_type, (var_number, var_number + len(variables)), modifier]),) + result)
+                    search_result.append((tuple(
+                        parent_infos + [variable_type, (var_number, var_number + len(variables)), modifier]),) + result)
                 break
         for variable in variables:
             search_result.extend(variable.Search(criteria, parent_infos + [variable_type, var_number]))
@@ -799,18 +854,21 @@ def _updateConfigurationConfigurationsClass(cls):
             ft.setanyText(description)
             var.setdocumentation(ft)
         globalvars[-1].appendvariable(var)
+
     setattr(cls, "addglobalVar", addglobalVar)
 
     def updateElementName(self, old_name, new_name):
         _updateConfigurationResourceElementName(self, old_name, new_name)
         for resource in self.getresource():
             resource.updateElementName(old_name, new_name)
+
     setattr(cls, "updateElementName", updateElementName)
 
     def updateElementAddress(self, address_model, new_leading):
         _updateConfigurationResourceElementAddress(self, address_model, new_leading)
         for resource in self.getresource():
             resource.updateElementAddress(address_model, new_leading)
+
     setattr(cls, "updateElementAddress", updateElementAddress)
 
     setattr(cls, "removeVariableByAddress", _removeConfigurationResourceVariableByAddress)
@@ -826,6 +884,7 @@ def _updateConfigurationConfigurationsClass(cls):
             for resource in self.getresource():
                 search_result.extend(resource.Search(criteria, parent_infos))
         return search_result
+
     setattr(cls, "Search", Search)
 
 
@@ -844,12 +903,14 @@ def _updateResourceConfigurationClass(cls):
             instance.updateElementName(old_name, new_name)
         for task in self.gettask():
             task.updateElementName(old_name, new_name)
+
     setattr(cls, "updateElementName", updateElementName)
 
     def updateElementAddress(self, address_model, new_leading):
         _updateConfigurationResourceElementAddress(self, address_model, new_leading)
         for task in self.gettask():
             task.updateElementAddress(address_model, new_leading)
+
     setattr(cls, "updateElementAddress", updateElementAddress)
 
     setattr(cls, "removeVariableByAddress", _removeConfigurationResourceVariableByAddress)
@@ -877,6 +938,7 @@ def _updateResourceConfigurationClass(cls):
             search_result.extend(instance.Search(criteria, parent_infos + ["instance", instance_number]))
             instance_number += 1
         return search_result
+
     setattr(cls, "Search", Search)
 
 
@@ -896,6 +958,7 @@ def _updateTaskResourceClass(cls):
             self.interval = new_name
         for instance in self.getpouInstance():
             instance.updateElementName(old_name, new_name)
+
     setattr(cls, "updateElementName", updateElementName)
 
     def updateElementAddress(self, address_model, new_leading):
@@ -903,6 +966,7 @@ def _updateTaskResourceClass(cls):
             self.single = update_address(self.single, address_model, new_leading)
         if self.interval is not None:
             self.interval = update_address(self.interval, address_model, new_leading)
+
     setattr(cls, "updateElementAddress", updateElementAddress)
 
     def Search(self, criteria, parent_infos=None):
@@ -911,6 +975,7 @@ def _updateTaskResourceClass(cls):
                         ("interval", self.getinterval()),
                         ("priority", str(self.getpriority()))],
                        criteria, parent_infos)
+
     setattr(cls, "Search", Search)
 
 
@@ -926,6 +991,7 @@ def _updatePouInstanceClass(cls):
     def updateElementName(self, old_name, new_name):
         if TextMatched(self.typeName, old_name):
             self.typeName = new_name
+
     setattr(cls, "updateElementName", updateElementName)
 
     def Search(self, criteria, parent_infos=None):
@@ -933,6 +999,7 @@ def _updatePouInstanceClass(cls):
         return _Search([("name", self.getname()),
                         ("type", self.gettypeName())],
                        criteria, parent_infos)
+
     setattr(cls, "Search", Search)
 
 
@@ -967,9 +1034,12 @@ def _updateVariableVarListPlain(cls):
             # Array derived directly from an elementary type
             else:
                 basetype_name = base_type_name
-            return "ARRAY [%s] OF %s" % (",".join(map(lambda x: "%s..%s" % (x.getlower(), x.getupper()), vartype_content.getdimension())), basetype_name)
+            return "ARRAY [%s] OF %s" % (
+                ",".join(map(lambda x: "%s..%s" % (x.getlower(), x.getupper()), vartype_content.getdimension())),
+                basetype_name)
         # Variable type is an elementary type
         return vartype_content_name
+
     setattr(cls, "gettypeAsText", gettypeAsText)
 
     def Search(self, criteria, parent_infos=None):
@@ -985,6 +1055,7 @@ def _updateVariableVarListPlain(cls):
         if doc is not None:
             search_result.extend(doc.Search(criteria, parent_infos + ["documentation"]))
         return search_result
+
     setattr(cls, "Search", Search)
 
 
@@ -999,6 +1070,7 @@ if cls:
 def _updateTypesProjectClass(cls):
     def getdataTypeElements(self):
         return self.dataTypes.getdataType()
+
     setattr(cls, "getdataTypeElements", getdataTypeElements)
 
     def getdataTypeElement(self, name):
@@ -1007,6 +1079,7 @@ def _updateTypesProjectClass(cls):
             if TextMatched(element.getname(), name):
                 return element
         return None
+
     setattr(cls, "getdataTypeElement", getdataTypeElement)
 
     def appenddataTypeElement(self, name):
@@ -1014,10 +1087,12 @@ def _updateTypesProjectClass(cls):
         self.dataTypes.appenddataType(new_datatype)
         new_datatype.setname(name)
         new_datatype.baseType.setcontent(PLCOpenParser.CreateElement("BOOL", "dataType"))
+
     setattr(cls, "appenddataTypeElement", appenddataTypeElement)
 
     def insertdataTypeElement(self, index, dataType):
         self.dataTypes.insertdataType(index, dataType)
+
     setattr(cls, "insertdataTypeElement", insertdataTypeElement)
 
     def removedataTypeElement(self, name):
@@ -1029,10 +1104,12 @@ def _updateTypesProjectClass(cls):
                 break
         if not found:
             raise ValueError(_("\"%s\" Data Type doesn't exist !!!") % name)
+
     setattr(cls, "removedataTypeElement", removedataTypeElement)
 
     def getpouElements(self):
         return self.pous.getpou()
+
     setattr(cls, "getpouElements", getpouElements)
 
     def getpouElement(self, name):
@@ -1041,6 +1118,7 @@ def _updateTypesProjectClass(cls):
             if TextMatched(element.getname(), name):
                 return element
         return None
+
     setattr(cls, "getpouElement", getpouElement)
 
     def appendpouElement(self, name, pou_type, body_type):
@@ -1053,10 +1131,12 @@ def _updateTypesProjectClass(cls):
         new_pou.setpouType(pou_type)
         new_pou.appendbody(PLCOpenParser.CreateElement("body", "pou"))
         new_pou.setbodyType(body_type)
+
     setattr(cls, "appendpouElement", appendpouElement)
 
     def insertpouElement(self, index, pou):
         self.pous.insertpou(index, pou)
+
     setattr(cls, "insertpouElement", insertpouElement)
 
     def removepouElement(self, name):
@@ -1068,6 +1148,7 @@ def _updateTypesProjectClass(cls):
                 break
         if not found:
             raise ValueError(_("\"%s\" POU doesn't exist !!!") % name)
+
     setattr(cls, "removepouElement", removepouElement)
 
     def Search(self, criteria, parent_infos=None):
@@ -1078,6 +1159,7 @@ def _updateTypesProjectClass(cls):
         for pou in self.pous.getpou():
             search_result.extend(pou.Search(criteria, parent_infos))
         return search_result
+
     setattr(cls, "Search", Search)
 
 
@@ -1107,6 +1189,7 @@ def _updateDataTypeDataTypesClass(cls):
             if self.initialValue is not None:
                 search_result.extend(_Search([("initial", self.initialValue.getvalue())], criteria, parent_infos))
         return search_result
+
     setattr(cls, "Search", Search)
 
 
@@ -1126,6 +1209,7 @@ def _updateDataTypeClass(cls):
         elif content_name == "struct":
             for element in self.content.getvariable():
                 element.type.updateElementName(old_name, new_name)
+
     setattr(cls, "updateElementName", updateElementName)
 
     def Search(self, criteria, parent_infos=None):
@@ -1142,6 +1226,7 @@ def _updateDataTypeClass(cls):
                 content_name = content_name.upper()
             search_result.extend(_Search([("base", content_name)], criteria, parent_infos))
         return search_result
+
     setattr(cls, "Search", Search)
 
 
@@ -1157,11 +1242,13 @@ def _updateDerivedDataTypeClass(cls):
     def updateElementName(self, old_name, new_name):
         if TextMatched(self.name, old_name):
             self.name = new_name
+
     setattr(cls, "updateElementName", updateElementName)
 
     def Search(self, criteria, parent_infos=None):
         parent_infos = [] if parent_infos is None else parent_infos
         return [(tuple(parent_infos),) + result for result in TestTextElement(self.name, criteria)]
+
     setattr(cls, "Search", Search)
 
 
@@ -1184,6 +1271,7 @@ def _updateArrayDataTypeClass(cls):
                                           ("upper", dimension.getupper())],
                                          criteria, parent_infos + ["range", i]))
         return search_result
+
     setattr(cls, "Search", Search)
 
 
@@ -1209,7 +1297,6 @@ if cls:
     setattr(cls, "updateElementName", _updateBaseTypeElementName)
     setattr(cls, "Search", _SearchInSubrange)
 
-
 # ----------------------------------------------------------------------
 
 
@@ -1225,6 +1312,7 @@ if cls:
 def _updateEnumDataTypeClass(cls):
     def updateElementName(self, old_name, new_name):
         pass
+
     setattr(cls, "updateElementName", updateElementName)
 
     enumerated_datatype_values_xpath = PLCOpen_XPath("ppx:values/ppx:value")
@@ -1236,6 +1324,7 @@ def _updateEnumDataTypeClass(cls):
             for result in TestTextElement(value.getname(), criteria):
                 search_result.append((tuple(parent_infos + ["value", i]),) + result)
         return search_result
+
     setattr(cls, "Search", Search)
 
 
@@ -1282,6 +1371,7 @@ def _updatePouPousClass(cls):
                                  ", ".join(["%s:%s" % (output[1], output[0])
                                             for output in block_infos["outputs"]])))
         return block_infos
+
     setattr(cls, "getblockInfos", getblockInfos)
 
     def setdescription(self, description):
@@ -1290,6 +1380,7 @@ def _updatePouPousClass(cls):
             doc = PLCOpenParser.CreateElement("documentation", "pou")
             self.setdocumentation(doc)
         doc.setanyText(description)
+
     setattr(cls, "setdescription", setdescription)
 
     def getdescription(self):
@@ -1297,6 +1388,7 @@ def _updatePouPousClass(cls):
         if doc is not None:
             return doc.getanyText()
         return ""
+
     setattr(cls, "getdescription", getdescription)
 
     def setbodyType(self, body_type):
@@ -1305,71 +1397,84 @@ def _updatePouPousClass(cls):
                 self.body[0].setcontent(PLCOpenParser.CreateElement(body_type, "body"))
             else:
                 raise ValueError("%s isn't a valid body type!" % type)
+
     setattr(cls, "setbodyType", setbodyType)
 
     def getbodyType(self):
         if len(self.body) > 0:
             return self.body[0].getcontent().getLocalTag()
+
     setattr(cls, "getbodyType", getbodyType)
 
     def resetexecutionOrder(self):
         if len(self.body) > 0:
             self.body[0].resetexecutionOrder()
+
     setattr(cls, "resetexecutionOrder", resetexecutionOrder)
 
     def compileexecutionOrder(self):
         if len(self.body) > 0:
             self.body[0].compileexecutionOrder()
+
     setattr(cls, "compileexecutionOrder", compileexecutionOrder)
 
     def setelementExecutionOrder(self, instance, new_executionOrder):
         if len(self.body) > 0:
             self.body[0].setelementExecutionOrder(instance, new_executionOrder)
+
     setattr(cls, "setelementExecutionOrder", setelementExecutionOrder)
 
     def addinstance(self, instance):
         if len(self.body) > 0:
             self.body[0].appendcontentInstance(instance)
+
     setattr(cls, "addinstance", addinstance)
 
     def getinstances(self):
         if len(self.body) > 0:
             return self.body[0].getcontentInstances()
         return []
+
     setattr(cls, "getinstances", getinstances)
 
     def getinstance(self, id):
         if len(self.body) > 0:
             return self.body[0].getcontentInstance(id)
         return None
+
     setattr(cls, "getinstance", getinstance)
 
     def getinstancesIds(self):
         if len(self.body) > 0:
             return self.body[0].getcontentInstancesIds()
         return []
+
     setattr(cls, "getinstancesIds", getinstancesIds)
 
     def getinstanceByName(self, name):
         if len(self.body) > 0:
             return self.body[0].getcontentInstanceByName(name)
         return None
+
     setattr(cls, "getinstanceByName", getinstanceByName)
 
     def removeinstance(self, id):
         if len(self.body) > 0:
             self.body[0].removecontentInstance(id)
+
     setattr(cls, "removeinstance", removeinstance)
 
     def settext(self, text):
         if len(self.body) > 0:
             self.body[0].settext(text)
+
     setattr(cls, "settext", settext)
 
     def gettext(self):
         if len(self.body) > 0:
             return self.body[0].gettext()
         return ""
+
     setattr(cls, "gettext", gettext)
 
     def getvars(self):
@@ -1381,16 +1486,47 @@ def _updatePouPousClass(cls):
             for varlist in self.interface.getcontent():
                 vars.append((reverse_types[varlist.getLocalTag()], varlist))
         return vars
+
     setattr(cls, "getvars", getvars)
 
+    def setvar(self, row, val):
+        if self.interface is None:
+            self.interface = PLCOpenParser.CreateElement("interface", "pou")
+        var = self.interface.findall(".//*[@name='%s']" % (val.Name))
+        if not var: raise Exception('var not found')
+        var = var[0]
+        if val.Location != "":
+            var.setaddress(val.Location)
+        else:
+            var.setaddress(None)
+        if val.Documentation != "":
+            ft = PLCOpenParser.CreateElement("documentation", "variable")
+            ft.setanyText(val.Documentation)
+            var.setdocumentation(ft)
+        else:
+            var.setdocumentation(None)
+        if val.InitialValue != "":
+            el = PLCOpenParser.CreateElement("initialValue", "variable")
+            el.setvalue(val.InitialValue)
+            var.setinitialValue(el)
+        else:
+            var.setinitialValue(None)
+        el = PLCOpenParser.CreateElement("type", "variable")
+        tt = PLCOpenParser.CreateElement(val.Type, "dataType")
+        el.setcontent(tt)
+        var.settype(el)
+
+    setattr(cls, "setvar", setvar)
     def setvars(self, vars):
         if self.interface is None:
             self.interface = PLCOpenParser.CreateElement("interface", "pou")
         self.interface.setcontent(vars)
+
     setattr(cls, "setvars", setvars)
 
     def addpouExternalVar(self, var_type, name):
         self.addpouVar(var_type, name, "externalVars")
+
     setattr(cls, "addpouExternalVar", addpouExternalVar)
 
     def addpouVar(self, var_type, name, var_class="localVars", location="", description="", initval=""):
@@ -1424,6 +1560,7 @@ def _updatePouPousClass(cls):
             var.setinitialValue(el)
 
         varlist.appendvariable(var)
+
     setattr(cls, "addpouVar", addpouVar)
     setattr(cls, "addpouLocalVar", addpouVar)
 
@@ -1435,10 +1572,12 @@ def _updatePouPousClass(cls):
                 for var in variables:
                     if TextMatched(var.getname(), old_name):
                         vartype_content = var.gettype().getcontent()
-                        if vartype_content.getLocalTag() == "derived" and TextMatched(vartype_content.getname(), old_type):
+                        if vartype_content.getLocalTag() == "derived" and TextMatched(vartype_content.getname(),
+                                                                                      old_type):
                             var.setname(new_name)
                             vartype_content.setname(new_type)
                             return
+
     setattr(cls, "changepouVar", changepouVar)
 
     def removepouVar(self, var_type, name):
@@ -1448,27 +1587,31 @@ def _updatePouPousClass(cls):
                 for var in varlist.getvariable():
                     if TextMatched(var.getname(), name):
                         vartype_content = var.gettype().getcontent()
-                        if vartype_content.getLocalTag() == "derived" and TextMatched(vartype_content.getname(), var_type):
+                        if vartype_content.getLocalTag() == "derived" and TextMatched(vartype_content.getname(),
+                                                                                      var_type):
                             varlist.remove(var)
                             if len(varlist.getvariable()) == 0:
                                 self.interface.remove(varlist)
                             break
+
     setattr(cls, "removepouVar", removepouVar)
 
     def hasstep(self, name=None):
         if self.getbodyType() in ["SFC"]:
             for instance in self.getinstances():
-                if isinstance(instance, PLCOpenParser.GetElementClass("step", "sfcObjects")) and TextMatched(instance.getname(), name):
+                if isinstance(instance, PLCOpenParser.GetElementClass("step", "sfcObjects")) and TextMatched(
+                        instance.getname(), name):
                     return True
         return False
+
     setattr(cls, "hasstep", hasstep)
 
     def hasblock(self, name=None, block_type=None):
         if self.getbodyType() in ["FBD", "LD", "SFC"]:
             for instance in self.getinstances():
                 if isinstance(instance, PLCOpenParser.GetElementClass("block", "fbdObjects")) \
-                   and (TextMatched(instance.getinstanceName(), name) or
-                        TextMatched(instance.gettypeName(), block_type)):
+                        and (TextMatched(instance.getinstanceName(), name) or
+                             TextMatched(instance.gettypeName(), block_type)):
                     return True
             if self.transitions:
                 for transition in self.transitions.gettransition():
@@ -1483,6 +1626,7 @@ def _updatePouPousClass(cls):
         elif block_type is not None and len(self.body) > 0:
             return self.body[0].hasblock(block_type)
         return False
+
     setattr(cls, "hasblock", hasblock)
 
     def addtransition(self, name, body_type):
@@ -1495,6 +1639,7 @@ def _updatePouPousClass(cls):
         transition.setbodyType(body_type)
         if body_type == "ST":
             transition.settext(":= ;")
+
     setattr(cls, "addtransition", addtransition)
 
     def gettransition(self, name):
@@ -1503,12 +1648,14 @@ def _updatePouPousClass(cls):
                 if TextMatched(transition.getname(), name):
                     return transition
         return None
+
     setattr(cls, "gettransition", gettransition)
 
     def gettransitionList(self):
         if self.transitions is not None:
             return self.transitions.gettransition()
         return []
+
     setattr(cls, "gettransitionList", gettransitionList)
 
     def removetransition(self, name):
@@ -1526,6 +1673,7 @@ def _updatePouPousClass(cls):
                     break
             if not removed:
                 raise ValueError(_("Transition with name %s doesn't exist!") % name)
+
     setattr(cls, "removetransition", removetransition)
 
     def addaction(self, name, body_type):
@@ -1536,6 +1684,7 @@ def _updatePouPousClass(cls):
         self.actions.appendaction(action)
         action.setname(name)
         action.setbodyType(body_type)
+
     setattr(cls, "addaction", addaction)
 
     def getaction(self, name):
@@ -1544,12 +1693,14 @@ def _updatePouPousClass(cls):
                 if TextMatched(action.getname(), name):
                     return action
         return None
+
     setattr(cls, "getaction", getaction)
 
     def getactionList(self):
         if self.actions is not None:
             return self.actions.getaction()
         return []
+
     setattr(cls, "getactionList", getactionList)
 
     def removeaction(self, name):
@@ -1567,6 +1718,7 @@ def _updatePouPousClass(cls):
                     break
             if not removed:
                 raise ValueError(_("Action with name %s doesn't exist!") % name)
+
     setattr(cls, "removeaction", removeaction)
 
     def updateElementName(self, old_name, new_name):
@@ -1588,6 +1740,7 @@ def _updatePouPousClass(cls):
             action.updateElementName(old_name, new_name)
         for transition in self.gettransitionList():
             transition.updateElementName(old_name, new_name)
+
     setattr(cls, "updateElementName", updateElementName)
 
     def updateElementAddress(self, address_model, new_leading):
@@ -1602,6 +1755,7 @@ def _updatePouPousClass(cls):
             action.updateElementAddress(address_model, new_leading)
         for transition in self.gettransitionList():
             transition.updateElementAddress(address_model, new_leading)
+
     setattr(cls, "updateElementAddress", updateElementAddress)
 
     def removeVariableByAddress(self, address):
@@ -1610,6 +1764,7 @@ def _updatePouPousClass(cls):
                 for variable in content.getvariable():
                     if TextMatched(variable.getaddress(), address):
                         content.remove(variable)
+
     setattr(cls, "removeVariableByAddress", removeVariableByAddress)
 
     def removeVariableByFilter(self, address_model):
@@ -1621,6 +1776,7 @@ def _updatePouPousClass(cls):
                         result = address_model.match(var_address)
                         if result is not None:
                             content.remove(variable)
+
     setattr(cls, "removeVariableByFilter", removeVariableByFilter)
 
     def Search(self, criteria, parent_infos=None):
@@ -1641,7 +1797,9 @@ def _updatePouPousClass(cls):
                                                    ("non_retain", content.getnonretain())]:
                         if has_modifier:
                             for result in TestTextElement(modifier, criteria):
-                                search_result.append((tuple(parent_infos + [variable_type, (var_number, var_number + len(variables)), modifier]),) + result)
+                                search_result.append((tuple(
+                                    parent_infos + [variable_type, (var_number, var_number + len(variables)),
+                                                    modifier]),) + result)
                             break
                     for variable in variables:
                         search_result.extend(variable.Search(criteria, parent_infos + [variable_type, var_number]))
@@ -1653,6 +1811,7 @@ def _updatePouPousClass(cls):
             for transition in self.gettransitionList():
                 search_result.extend(transition.Search(criteria, parent_infos))
         return search_result
+
     setattr(cls, "Search", Search)
 
 
@@ -1727,7 +1886,7 @@ def hasblock(self, name=None, block_type=None):
     if self.getbodyType() in ["FBD", "LD", "SFC"]:
         for instance in self.getinstances():
             if isinstance(instance, PLCOpenParser.GetElementClass("block", "fbdObjects")) and \
-               (TextMatched(instance.getinstanceName(), name) or TextMatched(instance.gettypeName(), block_type)):
+                    (TextMatched(instance.getinstanceName(), name) or TextMatched(instance.gettypeName(), block_type)):
                 return True
     elif block_type is not None:
         return self.body.hasblock(block_type)
@@ -1769,6 +1928,7 @@ def _updateTransitionTransitionsClass(cls):
             search_result.append((tuple(parent_infos + ["name"]),) + result)
         search_result.extend(self.body.Search(criteria, parent_infos))
         return search_result
+
     setattr(cls, "Search", Search)
 
 
@@ -1805,6 +1965,7 @@ def _updateActionActionsClass(cls):
             search_result.append((tuple(parent_infos + ["name"]),) + result)
         search_result.extend(self.body.Search(criteria, parent_infos))
         return search_result
+
     setattr(cls, "Search", Search)
 
 
@@ -1822,11 +1983,13 @@ def _updateBodyClass(cls):
 
     def resetcurrentExecutionOrderId(self):
         object.__setattr__(self, "currentExecutionOrderId", 0)
+
     setattr(cls, "resetcurrentExecutionOrderId", resetcurrentExecutionOrderId)
 
     def getnewExecutionOrderId(self):
         object.__setattr__(self, "currentExecutionOrderId", self.currentExecutionOrderId + 1)
         return self.currentExecutionOrderId
+
     setattr(cls, "getnewExecutionOrderId", getnewExecutionOrderId)
 
     def resetexecutionOrder(self):
@@ -1839,6 +2002,7 @@ def _updateBodyClass(cls):
             self.checkedBlocksDict.clear()
         else:
             raise TypeError(_("Can only generate execution order on FBD networks!"))
+
     setattr(cls, "resetexecutionOrder", resetexecutionOrder)
 
     def compileexecutionOrder(self):
@@ -1846,13 +2010,15 @@ def _updateBodyClass(cls):
             self.resetexecutionOrder()
             self.resetcurrentExecutionOrderId()
             for element in self.content.getcontent():
-                if isinstance(element, PLCOpenParser.GetElementClass("outVariable", "fbdObjects")) and element.getexecutionOrderId() == 0:
+                if isinstance(element, PLCOpenParser.GetElementClass("outVariable",
+                                                                     "fbdObjects")) and element.getexecutionOrderId() == 0:
                     connections = element.connectionPointIn.getconnections()
                     if connections and len(connections) == 1:
                         self.compileelementExecutionOrder(connections[0])
                     element.setexecutionOrderId(self.getnewExecutionOrderId())
         else:
             raise TypeError(_("Can only generate execution order on FBD networks!"))
+
     setattr(cls, "compileexecutionOrder", compileexecutionOrder)
 
     def compileelementExecutionOrder(self, link):
@@ -1860,7 +2026,8 @@ def _updateBodyClass(cls):
             localid = link.getrefLocalId()
             instance = self.getcontentInstance(localid)
             self.checkedBlocksDict[localid] = True
-            if isinstance(instance, PLCOpenParser.GetElementClass("block", "fbdObjects")) and instance.getexecutionOrderId() == 0:
+            if isinstance(instance,
+                          PLCOpenParser.GetElementClass("block", "fbdObjects")) and instance.getexecutionOrderId() == 0:
                 for variable in instance.inputVariables.getvariable():
                     connections = variable.connectionPointIn.getconnections()
                     if connections and len(connections) == 1:
@@ -1868,16 +2035,18 @@ def _updateBodyClass(cls):
                             self.compileelementExecutionOrder(connections[0])
                 if instance.getexecutionOrderId() == 0:
                     instance.setexecutionOrderId(self.getnewExecutionOrderId())
-            elif isinstance(instance, PLCOpenParser.GetElementClass("continuation", "commonObjects")) and instance.getexecutionOrderId() == 0:
+            elif isinstance(instance, PLCOpenParser.GetElementClass("continuation",
+                                                                    "commonObjects")) and instance.getexecutionOrderId() == 0:
                 for tmp_instance in self.getcontentInstances():
                     if isinstance(tmp_instance, PLCOpenParser.GetElementClass("connector", "commonObjects")) and \
-                       TextMatched(tmp_instance.getname(), instance.getname()) and \
-                       tmp_instance.getexecutionOrderId() == 0:
+                            TextMatched(tmp_instance.getname(), instance.getname()) and \
+                            tmp_instance.getexecutionOrderId() == 0:
                         connections = tmp_instance.connectionPointIn.getconnections()
                         if connections and len(connections) == 1:
                             self.compileelementExecutionOrder(connections[0])
         else:
             raise TypeError(_("Can only generate execution order on FBD networks!"))
+
     setattr(cls, "compileelementExecutionOrder", compileelementExecutionOrder)
 
     def setelementExecutionOrder(self, instance, new_executionOrder):
@@ -1885,7 +2054,8 @@ def _updateBodyClass(cls):
             old_executionOrder = instance.getexecutionOrderId()
             if old_executionOrder is not None and old_executionOrder != 0 and new_executionOrder != 0:
                 for element in self.content.getcontent():
-                    if element != instance and not isinstance(element, PLCOpenParser.GetElementClass("comment", "commonObjects")):
+                    if element != instance and not isinstance(element, PLCOpenParser.GetElementClass("comment",
+                                                                                                     "commonObjects")):
                         element_executionOrder = element.getexecutionOrderId()
                         if old_executionOrder <= element_executionOrder <= new_executionOrder:
                             element.setexecutionOrderId(element_executionOrder - 1)
@@ -1894,6 +2064,7 @@ def _updateBodyClass(cls):
             instance.setexecutionOrderId(new_executionOrder)
         else:
             raise TypeError(_("Can only generate execution order on FBD networks!"))
+
     setattr(cls, "setelementExecutionOrder", setelementExecutionOrder)
 
     def appendcontentInstance(self, instance):
@@ -1901,6 +2072,7 @@ def _updateBodyClass(cls):
             self.content.appendcontent(instance)
         else:
             raise TypeError(_("%s body don't have instances!") % self.content.getLocalTag())
+
     setattr(cls, "appendcontentInstance", appendcontentInstance)
 
     def getcontentInstances(self):
@@ -1908,6 +2080,7 @@ def _updateBodyClass(cls):
             return self.content.getcontent()
         else:
             raise TypeError(_("%s body don't have instances!") % self.content.getLocalTag())
+
     setattr(cls, "getcontentInstances", getcontentInstances)
 
     instance_by_id_xpath = PLCOpen_XPath("*[@localId=$localId]")
@@ -1921,6 +2094,7 @@ def _updateBodyClass(cls):
             return None
         else:
             raise TypeError(_("%s body don't have instances!") % self.content.getLocalTag())
+
     setattr(cls, "getcontentInstance", getcontentInstance)
 
     def getcontentInstancesIds(self):
@@ -1929,6 +2103,7 @@ def _updateBodyClass(cls):
                                 for instance in self.content])
         else:
             raise TypeError(_("%s body don't have instances!") % self.content.getLocalTag())
+
     setattr(cls, "getcontentInstancesIds", getcontentInstancesIds)
 
     def getcontentInstanceByName(self, name):
@@ -1939,6 +2114,7 @@ def _updateBodyClass(cls):
             return None
         else:
             raise TypeError(_("%s body don't have instances!") % self.content.getLocalTag())
+
     setattr(cls, "getcontentInstanceByName", getcontentInstanceByName)
 
     def removecontentInstance(self, local_id):
@@ -1950,6 +2126,7 @@ def _updateBodyClass(cls):
                 raise ValueError(_("Instance with id %d doesn't exist!") % id)
         else:
             raise TypeError(_("%s body don't have instances!") % self.content.getLocalTag())
+
     setattr(cls, "removecontentInstance", removecontentInstance)
 
     def settext(self, text):
@@ -1957,6 +2134,7 @@ def _updateBodyClass(cls):
             self.content.setanyText(text)
         else:
             raise TypeError(_("%s body don't have text!") % self.content.getLocalTag())
+
     setattr(cls, "settext", settext)
 
     def gettext(self):
@@ -1964,6 +2142,7 @@ def _updateBodyClass(cls):
             return self.content.getanyText()
         else:
             raise TypeError(_("%s body don't have text!") % self.content.getLocalTag())
+
     setattr(cls, "gettext", gettext)
 
     def hasblock(self, block_type):
@@ -1971,6 +2150,7 @@ def _updateBodyClass(cls):
             return self.content.hasblock(block_type)
         else:
             raise TypeError(_("%s body don't have text!") % self.content.getLocalTag())
+
     setattr(cls, "hasblock", hasblock)
 
     def updateElementName(self, old_name, new_name):
@@ -1979,6 +2159,7 @@ def _updateBodyClass(cls):
         else:
             for element in self.content.getcontent():
                 element.updateElementName(old_name, new_name)
+
     setattr(cls, "updateElementName", updateElementName)
 
     def updateElementAddress(self, address_model, new_leading):
@@ -1987,6 +2168,7 @@ def _updateBodyClass(cls):
         else:
             for element in self.content.getcontent():
                 element.updateElementAddress(address_model, new_leading)
+
     setattr(cls, "updateElementAddress", updateElementAddress)
 
     def Search(self, criteria, parent_infos=None):
@@ -1998,6 +2180,7 @@ def _updateBodyClass(cls):
             for element in self.content.getcontent():
                 search_result.extend(element.Search(criteria, parent_infos))
         return search_result
+
     setattr(cls, "Search", Search)
 
 
@@ -2059,7 +2242,7 @@ def _filterConnections(connectionPointIn, localId, connections):
         for connection in in_connections:
             connected = connection.getrefLocalId()
             if not (localId, connected) in connections and \
-               not (connected, localId) in connections:
+                    not (connected, localId) in connections:
                 connectionPointIn.remove(connection)
 
 
@@ -2181,23 +2364,28 @@ def _initElementClass(name, parent, connectionPointInType="none"):
 def _updateCommentCommonObjectsClass(cls):
     def setcontentText(self, text):
         self.content.setanyText(text)
+
     setattr(cls, "setcontentText", setcontentText)
 
     def getcontentText(self):
         return self.content.getanyText()
+
     setattr(cls, "getcontentText", getcontentText)
 
     def updateElementName(self, old_name, new_name):
         self.content.updateElementName(old_name, new_name)
+
     setattr(cls, "updateElementName", updateElementName)
 
     def updateElementAddress(self, address_model, new_leading):
         self.content.updateElementAddress(address_model, new_leading)
+
     setattr(cls, "updateElementAddress", updateElementAddress)
 
     def Search(self, criteria, parent_infos=None):
         parent_infos = [] if parent_infos is None else parent_infos
         return self.content.Search(criteria, parent_infos + ["comment", self.getlocalId(), "content"])
+
     setattr(cls, "Search", Search)
 
 
@@ -2215,16 +2403,19 @@ def _updateBlockFbdObjectsClass(cls):
         for input in self.inputVariables.getvariable():
             bbox.union(_getConnectionsBoundingBox(input.connectionPointIn))
         return bbox
+
     setattr(cls, "getBoundingBox", getBoundingBox)
 
     def updateElementName(self, old_name, new_name):
         if TextMatched(self.typeName, old_name):
             self.typeName = new_name
+
     setattr(cls, "updateElementName", updateElementName)
 
     def filterConnections(self, connections):
         for input in self.inputVariables.getvariable():
             _filterConnections(input.connectionPointIn, self.localId, connections)
+
     setattr(cls, "filterConnections", filterConnections)
 
     def updateConnectionsId(self, translation):
@@ -2232,12 +2423,14 @@ def _updateBlockFbdObjectsClass(cls):
         for input in self.inputVariables.getvariable():
             connections_end.extend(_updateConnectionsId(input.connectionPointIn, translation))
         return _getconnectionsdefinition(self, connections_end)
+
     setattr(cls, "updateConnectionsId", updateConnectionsId)
 
     def translate(self, dx, dy):
         _translate(self, dx, dy)
         for input in self.inputVariables.getvariable():
             _translateConnections(input.connectionPointIn, dx, dy)
+
     setattr(cls, "translate", translate)
 
     def Search(self, criteria, parent_infos=None):
@@ -2253,13 +2446,13 @@ def _updateBlockFbdObjectsClass(cls):
             for result in TestTextElement(variable.getformalParameter(), criteria):
                 search_result.append((tuple(parent_infos + ["output", i]),) + result)
         return search_result
+
     setattr(cls, "Search", Search)
 
 
 cls = _initElementClass("block", "fbdObjects")
 if cls:
     _updateBlockFbdObjectsClass(cls)
-
 
 # ----------------------------------------------------------------------
 
@@ -2281,6 +2474,7 @@ def _getSearchInLDElement(ld_element_type):
     def SearchInLDElement(self, criteria, parent_infos=None):
         parent_infos = [] if parent_infos is None else parent_infos
         return _Search([("reference", self.variable)], criteria, parent_infos + [ld_element_type, self.getlocalId()])
+
     return SearchInLDElement
 
 
@@ -2292,7 +2486,6 @@ if cls:
     setattr(cls, "updateElementName", _UpdateLDElementName)
     setattr(cls, "updateElementAddress", _UpdateLDElementAddress)
     setattr(cls, "Search", _getSearchInLDElement("contact"))
-
 
 # ----------------------------------------------------------------------
 
@@ -2311,6 +2504,7 @@ def _updateStepSfcObjectSingleClass(cls):
     def Search(self, criteria, parent_infos=None):
         parent_infos = [] if parent_infos is None else parent_infos
         return _Search([("name", self.getname())], criteria, parent_infos + ["step", self.getlocalId()])
+
     setattr(cls, "Search", Search)
 
 
@@ -2336,6 +2530,7 @@ def _updateTransitionSfcObjectsClass(cls):
         elif condition_type == "inline":
             condition.setcontent(PLCOpenParser.CreateElement("ST", "inline"))
             condition.settext(value)
+
     setattr(cls, "setconditionContent", setconditionContent)
 
     def getconditionContent(self):
@@ -2351,6 +2546,7 @@ def _updateTransitionSfcObjectsClass(cls):
                 values["value"] = content
             return values
         return ""
+
     setattr(cls, "getconditionContent", getconditionContent)
 
     def getconditionConnection(self):
@@ -2359,6 +2555,7 @@ def _updateTransitionSfcObjectsClass(cls):
             if content.getLocalTag() == "connectionPointIn":
                 return content
         return None
+
     setattr(cls, "getconditionConnection", getconditionConnection)
 
     def getBoundingBox(self):
@@ -2367,6 +2564,7 @@ def _updateTransitionSfcObjectsClass(cls):
         if condition_connection is not None:
             bbox.union(_getConnectionsBoundingBox(condition_connection))
         return bbox
+
     setattr(cls, "getBoundingBox", getBoundingBox)
 
     def translate(self, dx, dy):
@@ -2374,6 +2572,7 @@ def _updateTransitionSfcObjectsClass(cls):
         condition_connection = self.getconditionConnection()
         if condition_connection is not None:
             _translateConnections(condition_connection, dx, dy)
+
     setattr(cls, "translate", translate)
 
     def filterConnections(self, connections):
@@ -2381,6 +2580,7 @@ def _updateTransitionSfcObjectsClass(cls):
         condition_connection = self.getconditionConnection()
         if condition_connection is not None:
             _filterConnections(condition_connection, self.localId, connections)
+
     setattr(cls, "filterConnections", filterConnections)
 
     def updateConnectionsId(self, translation):
@@ -2391,6 +2591,7 @@ def _updateTransitionSfcObjectsClass(cls):
         if condition_connection is not None:
             connections_end.extend(_updateConnectionsId(condition_connection, translation))
         return _getconnectionsdefinition(self, connections_end)
+
     setattr(cls, "updateConnectionsId", updateConnectionsId)
 
     def updateElementName(self, old_name, new_name):
@@ -2402,6 +2603,7 @@ def _updateTransitionSfcObjectsClass(cls):
                     content.setname(new_name)
             elif content_name == "inline":
                 content.updateElementName(old_name, new_name)
+
     setattr(cls, "updateElementName", updateElementName)
 
     def updateElementAddress(self, address_model, new_leading):
@@ -2412,6 +2614,7 @@ def _updateTransitionSfcObjectsClass(cls):
                 content.setname(update_address(content.getname(), address_model, new_leading))
             elif content_name == "inline":
                 content.updateElementAddress(address_model, new_leading)
+
     setattr(cls, "updateElementAddress", updateElementAddress)
 
     def getconnections(self):
@@ -2419,6 +2622,7 @@ def _updateTransitionSfcObjectsClass(cls):
         if condition_connection is not None:
             return condition_connection.getconnections()
         return None
+
     setattr(cls, "getconnections", getconnections)
 
     def Search(self, criteria, parent_infos=None):
@@ -2432,13 +2636,13 @@ def _updateTransitionSfcObjectsClass(cls):
         elif content_name == "inline":
             search_result.extend(content.Search(criteria, parent_infos + ["inline"]))
         return search_result
+
     setattr(cls, "Search", Search)
 
 
 cls = _initElementClass("transition", "sfcObjects")
 if cls:
     _updateTransitionSfcObjectsClass(cls)
-
 
 # ----------------------------------------------------------------------
 
@@ -2452,6 +2656,7 @@ _initElementClass("simultaneousConvergence", "sfcObjects", "multiple")
 def _updateJumpStepSfcObjectSingleClass(cls):
     def Search(self, criteria, parent_infos):
         return _Search([("target", self.gettargetName())], criteria, parent_infos + ["jump", self.getlocalId()])
+
     setattr(cls, "Search", Search)
 
 
@@ -2467,24 +2672,28 @@ def _updateActionActionBlockClass(cls):
     def setreferenceName(self, name):
         if self.reference is not None:
             self.reference.setname(name)
+
     setattr(cls, "setreferenceName", setreferenceName)
 
     def getreferenceName(self):
         if self.reference is not None:
             return self.reference.getname()
         return None
+
     setattr(cls, "getreferenceName", getreferenceName)
 
     def setinlineContent(self, content):
         if self.inline is not None:
             self.inline.setcontent(PLCOpenParser.CreateElement("ST", "inline"))
             self.inline.settext(content)
+
     setattr(cls, "setinlineContent", setinlineContent)
 
     def getinlineContent(self):
         if self.inline is not None:
             return self.inline.gettext()
         return None
+
     setattr(cls, "getinlineContent", getinlineContent)
 
     def updateElementName(self, old_name, new_name):
@@ -2492,6 +2701,7 @@ def _updateActionActionBlockClass(cls):
             self.reference.setname(new_name)
         if self.inline is not None:
             self.inline.updateElementName(old_name, new_name)
+
     setattr(cls, "updateElementName", updateElementName)
 
     def updateElementAddress(self, address_model, new_leading):
@@ -2499,6 +2709,7 @@ def _updateActionActionBlockClass(cls):
             self.reference.setname(update_address(self.reference.getname(), address_model, new_leading))
         if self.inline is not None:
             self.inline.updateElementAddress(address_model, new_leading)
+
     setattr(cls, "updateElementAddress", updateElementAddress)
 
     def Search(self, criteria, parent_infos=None):
@@ -2512,6 +2723,7 @@ def _updateActionActionBlockClass(cls):
                         ("duration", self.getduration()),
                         ("indicator", self.getindicator())],
                        criteria, parent_infos)
+
     setattr(cls, "Search", Search)
 
 
@@ -2540,6 +2752,7 @@ def _updateActionBlockCommonObjectsSingleClass(cls):
                 action.setduration(params.duration)
             if params.indicator != "":
                 action.setindicator(params.indicator)
+
     setattr(cls, "setactions", setactions)
 
     def getactions(self):
@@ -2563,16 +2776,19 @@ def _updateActionBlockCommonObjectsSingleClass(cls):
                 params["indicator"] = indicator
             actions.append(params)
         return actions
+
     setattr(cls, "getactions", getactions)
 
     def updateElementName(self, old_name, new_name):
         for action in self.action:
             action.updateElementName(old_name, new_name)
+
     setattr(cls, "updateElementName", updateElementName)
 
     def updateElementAddress(self, address_model, new_leading):
         for action in self.action:
             action.updateElementAddress(address_model, new_leading)
+
     setattr(cls, "updateElementAddress", updateElementAddress)
 
     def Search(self, criteria, parent_infos=None):
@@ -2582,6 +2798,7 @@ def _updateActionBlockCommonObjectsSingleClass(cls):
         for idx, action in enumerate(self.action):
             search_result.extend(action.Search(criteria, parent_infos + ["action", idx]))
         return search_result
+
     setattr(cls, "Search", Search)
 
 
@@ -2640,6 +2857,7 @@ def _updateContinuationCommonObjectsClass(cls):
     def updateElementName(self, old_name, new_name):
         if TextMatched(self.name, old_name):
             self.name = new_name
+
     setattr(cls, "updateElementName", updateElementName)
 
 
@@ -2657,6 +2875,7 @@ def _updateConnectorCommonObjectsSingleClass(cls):
     def updateElementName(self, old_name, new_name):
         if TextMatched(self.name, old_name):
             self.name = new_name
+
     setattr(cls, "updateElementName", updateElementName)
 
 
@@ -2677,6 +2896,7 @@ def _updateConnectionClass(cls):
             position.sety(point.y)
             positions.append(position)
         self.position = positions
+
     setattr(cls, "setpoints", setpoints)
 
     def getpoints(self):
@@ -2684,6 +2904,7 @@ def _updateConnectionClass(cls):
         for position in self.position:
             points.append((position.getx(), position.gety()))
         return points
+
     setattr(cls, "getpoints", getpoints)
 
 
@@ -2700,25 +2921,30 @@ def _updateConnectionPointInClass(cls):
         self.relPosition = PLCOpenParser.CreateElement("relPosition", "connectionPointIn")
         self.relPosition.setx(x)
         self.relPosition.sety(y)
+
     setattr(cls, "setrelPositionXY", setrelPositionXY)
 
     def getrelPositionXY(self):
         if self.relPosition is not None:
             return self.relPosition.getx(), self.relPosition.gety()
         return self.relPosition
+
     setattr(cls, "getrelPositionXY", getrelPositionXY)
 
     def addconnection(self):
         self.append(PLCOpenParser.CreateElement("connection", "connectionPointIn"))
+
     setattr(cls, "addconnection", addconnection)
 
     def removeconnection(self, idx):
         if len(self.content) > idx:
             self.remove(self.content[idx])
+
     setattr(cls, "removeconnection", removeconnection)
 
     def removeconnections(self):
         self.content = None
+
     setattr(cls, "removeconnections", removeconnections)
 
     connection_xpath = PLCOpen_XPath("ppx:connection")
@@ -2726,19 +2952,22 @@ def _updateConnectionPointInClass(cls):
 
     def getconnections(self):
         return connection_xpath(self)
+
     setattr(cls, "getconnections", getconnections)
 
     def getconnection(self, idx):
-        connection = connection_by_position_xpath(self, pos=idx+1)
+        connection = connection_by_position_xpath(self, pos=idx + 1)
         if len(connection) > 0:
             return connection[0]
         return None
+
     setattr(cls, "getconnection", getconnection)
 
     def setconnectionId(self, idx, local_id):
         connection = self.getconnection(idx)
         if connection is not None:
             connection.setrefLocalId(local_id)
+
     setattr(cls, "setconnectionId", setconnectionId)
 
     def getconnectionId(self, idx):
@@ -2746,12 +2975,14 @@ def _updateConnectionPointInClass(cls):
         if connection is not None:
             return connection.getrefLocalId()
         return None
+
     setattr(cls, "getconnectionId", getconnectionId)
 
     def setconnectionPoints(self, idx, points):
         connection = self.getconnection(idx)
         if connection is not None:
             connection.setpoints(points)
+
     setattr(cls, "setconnectionPoints", setconnectionPoints)
 
     def getconnectionPoints(self, idx):
@@ -2759,12 +2990,14 @@ def _updateConnectionPointInClass(cls):
         if connection is not None:
             return connection.getpoints()
         return []
+
     setattr(cls, "getconnectionPoints", getconnectionPoints)
 
     def setconnectionParameter(self, idx, parameter):
         connection = self.getconnection(idx)
         if connection is not None:
             connection.setformalParameter(parameter)
+
     setattr(cls, "setconnectionParameter", setconnectionParameter)
 
     def getconnectionParameter(self, idx):
@@ -2772,6 +3005,7 @@ def _updateConnectionPointInClass(cls):
         if connection is not None:
             return connection.getformalParameter()
         return None
+
     setattr(cls, "getconnectionParameter", getconnectionParameter)
 
 
@@ -2781,14 +3015,18 @@ if cls:
         self.relPosition = PLCOpenParser.CreateElement("relPosition", "connectionPointOut")
         self.relPosition.setx(x)
         self.relPosition.sety(y)
+
+
     setattr(cls, "setrelPositionXY", setrelPositionXY)
+
 
     def getrelPositionXY(self):
         if self.relPosition is not None:
             return self.relPosition.getx(), self.relPosition.gety()
         return self.relPosition
-    setattr(cls, "getrelPositionXY", getrelPositionXY)
 
+
+    setattr(cls, "getrelPositionXY", getrelPositionXY)
 
 cls = PLCOpenParser.GetElementClass("connectionPointIn")
 if cls:
@@ -2809,10 +3047,12 @@ def _updateValueClass(cls):
             content = PLCOpenParser.CreateElement("simpleValue", "value")
         content.setvalue(value)
         self.setcontent(content)
+
     setattr(cls, "setvalue", setvalue)
 
     def getvalue(self):
         return self.content.getvalue()
+
     setattr(cls, "getvalue", getvalue)
 
 
@@ -2854,6 +3094,7 @@ def _updateArrayValueValueClass(cls):
                 element.setvalue(item)
             elements.append(element)
         self.value = elements
+
     setattr(cls, "setvalue", setvalue)
 
     def getvalue(self):
@@ -2871,6 +3112,7 @@ def _updateArrayValueValueClass(cls):
             else:
                 values.append(element.getvalue())
         return "[%s]" % ", ".join(values)
+
     setattr(cls, "getvalue", getvalue)
 
 
@@ -2878,6 +3120,7 @@ cls = PLCOpenParser.GetElementClass("arrayValue", "value")
 if cls:
     arrayValue_model = re.compile(r"([0-9]+)\((.*)\)$")
     _updateArrayValueValueClass(cls)
+
 
 # ----------------------------------------------------------------------
 
@@ -2894,6 +3137,7 @@ def _updateStructValueValueClass(cls):
                 element.setvalue(groups[1].strip())
                 elements.append(element)
         self.value = elements
+
     setattr(cls, "setvalue", setvalue)
 
     def getvalue(self):
@@ -2901,6 +3145,7 @@ def _updateStructValueValueClass(cls):
         for element in self.value:
             values.append("%s := %s" % (element.getmember(), element.getvalue()))
         return "(%s)" % ", ".join(values)
+
     setattr(cls, "getvalue", getvalue)
 
 

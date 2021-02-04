@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
-<project xmlns:ns1="http://www.plcopen.org/xml/tc6_0201" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://www.plcopen.org/xml/tc6_0201">
+<project xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns="http://www.plcopen.org/xml/tc6_0201">
   <fileHeader companyName="Beremiz" productName="Beremiz" productVersion="1" creationDateTime="2018-07-27T13:19:12"/>
-  <contentHeader name="Modbus" modificationDateTime="2018-07-27T15:43:56">
+    <contentHeader name="Modbus" modificationDateTime="2020-06-07T13:35:46">
     <coordinateInfo>
       <fbd>
         <scaling x="0" y="0"/>

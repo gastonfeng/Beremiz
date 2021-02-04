@@ -23,14 +23,14 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
+import hashlib
+import operator
+# from __future__ import absolute_import
 import os
 import re
-import operator
-import hashlib
 from functools import reduce
-from util.ProcessLogger import ProcessLogger
 
+from util.ProcessLogger import ProcessLogger
 
 includes_re = re.compile(r'\s*#include\s*["<]([^">]*)[">].*')
 
@@ -47,20 +47,20 @@ class toolchain_makefile(object):
             self.buildpath = buildpath
             self.md5key = None
 
-    def GetBinaryPath(self):
+    def GetBinaryCode(self):
         return None
 
     def _GetMD5FileName(self):
         return os.path.join(self.buildpath, "lastbuildPLC.md5")
 
-    def ResetBinaryMD5(self):
+    def ResetBinaryCodeMD5(self):
         self.md5key = None
         try:
             os.remove(self._GetMD5FileName())
         except Exception:
             pass
 
-    def GetBinaryMD5(self):
+    def GetBinaryCodeMD5(self):
         if self.md5key is not None:
             return self.md5key
         else:
@@ -83,7 +83,7 @@ class toolchain_makefile(object):
                     deps.append(depfn)
         # recurse through deps
         # TODO detect cicular deps.
-        return reduce(operator.concat, map(self.concat_deps, deps), src)
+        return reduce(operator.concat, list(map(self.concat_deps, deps)), src)
 
     def build(self):
         srcfiles = []
@@ -102,7 +102,7 @@ class toolchain_makefile(object):
         self.md5key = hashlib.md5(wholesrcdata).hexdigest()
 
         # Store new PLC filename based on md5 key
-        f = open(self._GetMD5FileName(), "w")
+        f = open(self._GetMD5FileName(), "w", encoding='utf-8')
         f.write(self.md5key)
         f.close()
 

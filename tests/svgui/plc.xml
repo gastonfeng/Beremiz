@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.plcopen.org/xml/tc6_0201" xmlns:xhtml="http://www.w3.org/1999/xhtml" xsi:schemaLocation="http://www.plcopen.org/xml/tc6_0201">
   <fileHeader companyName="beremiz" productName="Beremiz" productVersion="0.0" creationDateTime="2008-12-14T16:21:19"/>
-  <contentHeader name="Beremiz SVGUI Test" modificationDateTime="2018-09-26T13:18:53">
+  <contentHeader name="Beremiz SVGUI Test" modificationDateTime="2020-06-02T18:02:02">
     <coordinateInfo>
       <pageSize x="1024" y="1024"/>
       <fbd>

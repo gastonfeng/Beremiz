@@ -24,6 +24,7 @@
 
 
 from __future__ import absolute_import
+
 from threading import Lock, Timer
 from time import time as gettime
 
@@ -84,6 +85,7 @@ class DebugViewer(object):
         Destructor
         """
         # Unsubscribe all data consumers
+        ## @TODO:关闭窗口注销监控变量
         self.UnsubscribeAllDataConsumers()
 
         # Delete reference to DataProducer
@@ -130,7 +132,7 @@ class DebugViewer(object):
         @param inhibit: Inhibit flag
         """
         # Inhibit every data consumers in list
-        for consumer, _iec_path in self.DataConsumers.iteritems():
+        for consumer, _iec_path in self.DataConsumers.items():
             consumer.Inhibit(inhibit)
 
         # Save inhibit flag
@@ -192,7 +194,7 @@ class DebugViewer(object):
                 self.DataProducer.UnsubscribeDebugIECVariable("__tick__", self)
 
             # Unsubscribe all data consumers in list
-            for consumer, iec_path in self.DataConsumers.iteritems():
+            for consumer, iec_path in self.DataConsumers.items():
                 self.DataProducer.UnsubscribeDebugIECVariable(iec_path, consumer)
 
         self.DataConsumers = {}

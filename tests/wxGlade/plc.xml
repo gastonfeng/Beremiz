@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.plcopen.org/xml/tc6_0201" xmlns:xhtml="http://www.w3.org/1999/xhtml" xsi:schemaLocation="http://www.plcopen.org/xml/tc6_0201">
   <fileHeader companyName="beremiz" productName="Beremiz" productVersion="0.0" creationDateTime="2008-12-14T16:21:19"/>
-  <contentHeader name="Beremiz wxHMI test" modificationDateTime="2017-06-05T14:01:40">
+  <contentHeader name="Beremiz wxHMI test" modificationDateTime="2020-06-09T23:37:27">
     <coordinateInfo>
       <pageSize x="1024" y="1024"/>
       <fbd>
@@ -91,14 +91,14 @@
               <expression>'int(HMIFrame.checkbox_1.GetValue())'</expression>
             </inVariable>
             <inVariable localId="27" height="30" width="40" executionOrderId="0" negated="false">
-              <position x="535" y="505"/>
+              <position x="660" y="505"/>
               <connectionPointOut>
                 <relPosition x="40" y="15"/>
               </connectionPointOut>
               <expression>')'</expression>
             </inVariable>
             <inVariable localId="28" height="30" width="330" executionOrderId="0" negated="false">
-              <position x="150" y="415"/>
+              <position x="360" y="390"/>
               <connectionPointOut>
                 <relPosition x="330" y="15"/>
               </connectionPointOut>
@@ -172,9 +172,9 @@
                       <position x="135" y="520"/>
                       <position x="125" y="520"/>
                       <position x="125" y="540"/>
-                      <position x="340" y="540"/>
-                      <position x="340" y="500"/>
-                      <position x="320" y="500"/>
+                      <position x="420" y="540"/>
+                      <position x="420" y="505"/>
+                      <position x="375" y="505"/>
                     </connection>
                   </connectionPointIn>
                 </variable>
@@ -194,16 +194,16 @@
               </outputVariables>
             </block>
             <block localId="34" width="80" height="100" typeName="CONCAT" executionOrderId="0">
-              <position x="605" y="430"/>
+              <position x="730" y="425"/>
               <inputVariables>
                 <variable formalParameter="EN">
                   <connectionPointIn>
                     <relPosition x="0" y="30"/>
                     <connection refLocalId="35" formalParameter="ENO">
-                      <position x="605" y="460"/>
-                      <position x="520" y="460"/>
-                      <position x="520" y="480"/>
-                      <position x="500" y="480"/>
+                      <position x="730" y="455"/>
+                      <position x="700" y="455"/>
+                      <position x="700" y="475"/>
+                      <position x="620" y="475"/>
                     </connection>
                   </connectionPointIn>
                 </variable>
@@ -211,10 +211,10 @@
                   <connectionPointIn>
                     <relPosition x="0" y="50"/>
                     <connection refLocalId="28">
-                      <position x="605" y="480"/>
-                      <position x="562" y="480"/>
-                      <position x="562" y="430"/>
-                      <position x="480" y="430"/>
+                      <position x="730" y="475"/>
+                      <position x="720" y="475"/>
+                      <position x="720" y="405"/>
+                      <position x="690" y="405"/>
                     </connection>
                   </connectionPointIn>
                 </variable>
@@ -222,8 +222,8 @@
                   <connectionPointIn>
                     <relPosition x="0" y="70"/>
                     <connection refLocalId="35" formalParameter="OUT">
-                      <position x="605" y="500"/>
-                      <position x="500" y="500"/>
+                      <position x="730" y="495"/>
+                      <position x="620" y="495"/>
                     </connection>
                   </connectionPointIn>
                 </variable>
@@ -231,8 +231,10 @@
                   <connectionPointIn>
                     <relPosition x="0" y="90"/>
                     <connection refLocalId="27">
-                      <position x="605" y="520"/>
-                      <position x="575" y="520"/>
+                      <position x="730" y="515"/>
+                      <position x="715" y="515"/>
+                      <position x="715" y="520"/>
+                      <position x="700" y="520"/>
                     </connection>
                   </connectionPointIn>
                 </variable>
@@ -252,11 +254,13 @@
               </outputVariables>
             </block>
             <inOutVariable localId="33" height="35" width="85" executionOrderId="0" negatedOut="false" negatedIn="false">
-              <position x="235" y="485"/>
+              <position x="290" y="490"/>
               <connectionPointIn>
                 <relPosition x="0" y="15"/>
                 <connection refLocalId="32" formalParameter="OUT">
-                  <position x="235" y="500"/>
+                  <position x="290" y="505"/>
+                  <position x="267" y="505"/>
+                  <position x="267" y="500"/>
                   <position x="215" y="500"/>
                 </connection>
               </connectionPointIn>
@@ -266,13 +270,15 @@
               <expression>counter</expression>
             </inOutVariable>
             <block localId="35" width="145" height="60" typeName="INT_TO_STRING" executionOrderId="0">
-              <position x="355" y="450"/>
+              <position x="475" y="445"/>
               <inputVariables>
                 <variable formalParameter="EN">
                   <connectionPointIn>
                     <relPosition x="0" y="30"/>
                     <connection refLocalId="32" formalParameter="ENO">
-                      <position x="355" y="480"/>
+                      <position x="475" y="475"/>
+                      <position x="335" y="475"/>
+                      <position x="335" y="480"/>
                       <position x="215" y="480"/>
                     </connection>
                   </connectionPointIn>
@@ -281,8 +287,10 @@
                   <connectionPointIn>
                     <relPosition x="0" y="50"/>
                     <connection refLocalId="33">
-                      <position x="355" y="500"/>
-                      <position x="320" y="500"/>
+                      <position x="475" y="495"/>
+                      <position x="420" y="495"/>
+                      <position x="420" y="505"/>
+                      <position x="375" y="505"/>
                     </connection>
                   </connectionPointIn>
                 </variable>
@@ -302,14 +310,16 @@
               </outputVariables>
             </block>
             <block localId="36" width="125" height="90" typeName="python_poll" instanceName="setSpinCtrlValue" executionOrderId="0">
-              <position x="735" y="425"/>
+              <position x="1010" y="405"/>
               <inputVariables>
                 <variable formalParameter="TRIG">
                   <connectionPointIn>
                     <relPosition x="0" y="35"/>
                     <connection refLocalId="34" formalParameter="ENO">
-                      <position x="735" y="460"/>
-                      <position x="685" y="460"/>
+                      <position x="1010" y="440"/>
+                      <position x="905" y="440"/>
+                      <position x="905" y="455"/>
+                      <position x="810" y="455"/>
                     </connection>
                   </connectionPointIn>
                 </variable>
@@ -317,10 +327,8 @@
                   <connectionPointIn>
                     <relPosition x="0" y="70"/>
                     <connection refLocalId="34" formalParameter="OUT">
-                      <position x="735" y="495"/>
-                      <position x="715" y="495"/>
-                      <position x="715" y="480"/>
-                      <position x="685" y="480"/>
+                      <position x="1010" y="475"/>
+                      <position x="810" y="475"/>
                     </connection>
                   </connectionPointIn>
                 </variable>
@@ -417,8 +425,9 @@ To edit user interface click on "WxGlade" icon in extension settings.]]></xhtml:
     <configurations>
       <configuration name="config">
         <resource name="res_pytest">
-          <task name="pytest_task" interval="t#100ms" priority="0"/>
-          <pouInstance name="pytest_instance" typeName="main_pytest"/>
+          <task name="pytest_task" priority="0" interval="t#100ms">
+            <pouInstance name="pytest_instance" typeName="main_pytest"/>
+          </task>
         </resource>
       </configuration>
     </configurations>

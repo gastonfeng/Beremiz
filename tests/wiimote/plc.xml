@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <project xmlns="http://www.plcopen.org/xml/tc6_0201" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xhtml="http://www.w3.org/1999/xhtml" xsi:schemaLocation="http://www.plcopen.org/xml/tc6_0201">
   <fileHeader companyName="Beremiz" productName="Beremiz" productVersion="1" creationDateTime="2012-09-12T23:30:19"/>
-  <contentHeader name="Wiimote example" modificationDateTime="2017-06-06T13:10:31">
+  <contentHeader name="Wiimote example" modificationDateTime="2020-06-03T09:43:00">
     <coordinateInfo>
       <fbd>
         <scaling x="5" y="5"/>

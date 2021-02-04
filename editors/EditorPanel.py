@@ -24,13 +24,13 @@
 
 
 from __future__ import absolute_import
+
 import wx
 
-from controls import VariablePanel
+from controls.VariablePanel import VariablePanel
 
 
 class EditorPanel(wx.SplitterWindow):
-
     VARIABLE_PANEL_TYPE = None
 
     def _init_Editor(self, prnt):
@@ -71,6 +71,11 @@ class EditorPanel(wx.SplitterWindow):
 
         self._init_ctrls(parent)
 
+    def onClose(self, event):
+        if self.VariableEditor is not None:
+            self.VariableEditor.Save()
+        event.Skip()
+
     def SetTagName(self, tagname):
         self.TagName = tagname
         if self.VARIABLE_PANEL_TYPE is not None:
@@ -110,7 +115,8 @@ class EditorPanel(wx.SplitterWindow):
         return True
 
     def Save(self):
-        pass
+        if self.VariableEditor:
+            self.VariableEditor.Save()
 
     def SaveAs(self):
         pass
@@ -136,13 +142,13 @@ class EditorPanel(wx.SplitterWindow):
     def HasNoModel(self):
         return False
 
-    def RefreshView(self, variablepanel=True):
+    def RefreshView(self, variablepanel=True, reload=False):
         if variablepanel:
-            self.RefreshVariablePanel()
+            self.RefreshVariablePanel(reload)
 
-    def RefreshVariablePanel(self):
+    def RefreshVariablePanel(self, reload=False):
         if self.VariableEditor is not None:
-            self.VariableEditor.RefreshView()
+            self.VariableEditor.RefreshView(reload)
 
     def GetConfNodeMenuItems(self):
         return self.MenuItems
@@ -157,11 +163,13 @@ class EditorPanel(wx.SplitterWindow):
         pass
 
     def AddHighlight(self, infos, start, end, highlight_type):
-        if self.VariableEditor is not None and infos[0] in ["var_local", "var_input", "var_output", "var_inout"]:
+        if self.VariableEditor is not None and infos[0] in ["var_local", "var_input", "var_output",
+                                                            "var_inout"] and self.VariableEditor.showVarList:
             self.VariableEditor.AddVariableHighlight(infos[1:], highlight_type)
 
     def RemoveHighlight(self, infos, start, end, highlight_type):
-        if self.VariableEditor is not None and infos[0] in ["var_local", "var_input", "var_output", "var_inout"]:
+        if self.VariableEditor is not None and infos[0] in ["var_local", "var_input", "var_output",
+                                                            "var_inout"] and self.VariableEditor.showVarList:
             self.VariableEditor.RemoveVariableHighlight(infos[1:], highlight_type)
 
     def ClearHighlights(self, highlight_type=None):

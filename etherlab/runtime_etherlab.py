@@ -1,14 +1,24 @@
-from __future__ import absolute_import
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+# this file is part of beremiz
+#
+# copyright (c) 2011-2014: laurent bessard, edouard tisserant
+#                          rtes lab : crkim, jblee, youcu
+#                          higen motor : donggu kang
+#
+# see copying file for copyrights details.
+
+
+import ctypes
 import os
+import re
 import signal
 import subprocess
-import ctypes
-from threading import Thread
 import time
-import re
+from threading import Thread
 
 import runtime.PLCObject as PLCObject
-from runtime.loglevels import LogLevelsDict
 
 SDOAnswered = PLCBinary.SDOAnswered
 SDOAnswered.restype = None

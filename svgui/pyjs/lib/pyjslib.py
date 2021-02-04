@@ -39,7 +39,7 @@ def import_module(path, parent_module, module_name, dynamic=1, async=False):
 
         var override_name = sys.platform + "." + module_name;
         if (((sys.overrides != null) &&
-             (sys.overrides.has_key(override_name))))
+             (sys.overrides.get(override_name))))
         {
             cache_file =  sys.overrides.__getitem__(override_name) ;
         }
@@ -234,7 +234,6 @@ def preload_app_modules(path, app_modnames, app_imported_fn, dynamic,
 
 # as comment on line 20 says
 # import sys should be below
-import sys  # noqa # pylint: disable=wrong-import-order,unused-import,wrong-import-position
 
 
 class BaseException:
@@ -548,7 +547,7 @@ class List:
         if ll != 0:
             return ll
         for x in range(len(l)):
-            ll = cmp(self.__getitem__(x), l[x])
+            ll = operator.eq(self.__getitem__(x), l[x])
             if ll != 0:
                 return ll
         return 0
@@ -883,7 +882,7 @@ class Dict:
         """)
 
     def __iter__(self):
-        return self.keys().__iter__()
+        return list(self.keys()).__iter__()
 
     def iterkeys(self):
         return self.__iter__()
@@ -904,7 +903,7 @@ class Dict:
         return self[key]
 
     def update(self, d):
-        for k, v in d.iteritems():
+        for k, v in d.items():
             self[k] = v
 
     def getObject(self):
@@ -1408,7 +1407,7 @@ def type(clsname, bases=None, methods=None):
 
     JS(" var mths = {}; ")
     if methods:
-        for k in methods.keys():
+        for k in list(methods.keys()):
             _mth = methods[k]
             JS(" mths[k] = _mth; ")
 

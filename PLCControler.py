@@ -24,28 +24,28 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
-from __future__ import division
-from copy import deepcopy
-import os
-import re
 import datetime
+import os
+from copy import deepcopy
 from time import localtime
-from functools import reduce
-from future.builtins import round
 
-import util.paths as paths
+from PLCGenerator import *
+from beremiz.util import paths
+from graphics.GraphicCommons import *
 from plcopen import *
-from plcopen.types_enums import *
+from plcopen.BlockInstanceCollector import BlockInstanceCollector
+from plcopen.InstanceTagnameCollector import InstanceTagnameCollector
 from plcopen.InstancesPathCollector import InstancesPathCollector
 from plcopen.POUVariablesCollector import POUVariablesCollector
-from plcopen.InstanceTagnameCollector import InstanceTagnameCollector
-from plcopen.BlockInstanceCollector import BlockInstanceCollector
 from plcopen.VariableInfoCollector import VariableInfoCollector
-from graphics.GraphicCommons import *
-from PLCGenerator import *
+from plcopen.types_enums import ITEM_PROJECT, DATA_TYPES, ITEM_DATATYPES, FUNCTIONS, ITEM_FUNCTION, FUNCTION_BLOCKS, \
+    ITEM_FUNCTIONBLOCK, PROGRAMS, ITEM_PROGRAM, ITEM_DATATYPE, ITEM_POU, ITEM_TRANSITION, TRANSITIONS, ITEM_ACTION, \
+    ACTIONS, CONFIGURATIONS, ITEM_CONFIGURATIONS, RESOURCES, ITEM_RESOURCES, ITEM_RESOURCE, ITEM_ACTIONS, \
+    ITEM_TRANSITIONS, ComputePouName, ComputePouTransitionName, ComputePouActionName, ITEM_CONFIGURATION, \
+    ComputeConfigurationName, ComputeConfigurationResourceName, ComputeDataTypeName, VAR_CLASS_INFOS, USER_DEFINED_POUS
 
-duration_model = re.compile(r"(?:([0-9]{1,2})h)?(?:([0-9]{1,2})m(?!s))?(?:([0-9]{1,2})s)?(?:([0-9]{1,3}(?:\.[0-9]*)?)ms)?")
+duration_model = re.compile(
+    r"(?:([0-9]{1,2})h)?(?:([0-9]{1,2})m(?!s))?(?:([0-9]{1,2})s)?(?:([0-9]{1,3}(?:\.[0-9]*)?)ms)?")
 VARIABLE_NAME_SUFFIX_MODEL = re.compile(r'(\d+)$')
 
 ScriptDirectory = paths.AbsDir(__file__)
@@ -74,7 +74,7 @@ class UndoBuffer(object):
             self.MinIndex = 0
             self.MaxIndex = 0
         # Initialising buffer with currentstate at the first place
-        for i in xrange(UNDO_BUFFER_LENGTH):
+        for i in range(UNDO_BUFFER_LENGTH):
             if i == 0:
                 self.Buffer.append(currentstate)
             else:
@@ -307,18 +307,18 @@ class PLCControler(object):
                     "values": []})
             pou_types = {
                 "function": {
-                    "name":   FUNCTIONS,
-                    "type":   ITEM_FUNCTION,
+                    "name": FUNCTIONS,
+                    "type": ITEM_FUNCTION,
                     "values": []
                 },
                 "functionBlock": {
-                    "name":   FUNCTION_BLOCKS,
-                    "type":   ITEM_FUNCTIONBLOCK,
+                    "name": FUNCTION_BLOCKS,
+                    "type": ITEM_FUNCTIONBLOCK,
                     "values": []
                 },
                 "program": {
-                    "name":   PROGRAMS,
-                    "type":   ITEM_PROGRAM,
+                    "name": PROGRAMS,
+                    "type": ITEM_PROGRAM,
                     "values": []
                 }
             }
@@ -371,6 +371,7 @@ class PLCControler(object):
             return infos
         return None
 
+    # @functools.lru_cache(maxsize=5)
     def GetPouVariables(self, tagname, debug=False):
         project = self.GetProject(debug)
         if project is not None:
@@ -385,6 +386,7 @@ class PLCControler(object):
 
         return None
 
+    # @functools.lru_cache(maxsize=5)
     def GetInstanceList(self, root, name, debug=False):
         return self.InstancesPathCollector.Collect(root, name, debug)
 
@@ -401,9 +403,10 @@ class PLCControler(object):
             elif words[0] in ['T', 'A']:
                 return ["%s.%s" % (instance, words[2])
                         for instance in self.SearchPouInstances(
-                            ComputePouName(words[1]), debug)]
+                        ComputePouName(words[1]), debug)]
         return []
 
+    # @functools.lru_cache(maxsize=5)
     def GetPouInstanceTagName(self, instance_path, debug=False):
         project = self.GetProject(debug)
         if project is not None:
@@ -448,21 +451,22 @@ class PLCControler(object):
             return len(self.GetInstanceList(pou_infos, name, debug)) > 0
         return False
 
-    def GenerateProgram(self, filepath=None):
+    def GenerateProgram(self, filepath=None, logger=None):
         errors = []
         warnings = []
         if self.Project is not None:
             try:
-                self.ProgramChunks = GenerateCurrentProgram(self, self.Project, errors, warnings)
+                self.ProgramChunks = GenerateCurrentProgram(self, self.Project, errors, warnings, logger=logger)
                 self.NextCompiledProject = self.Copy(self.Project)
                 program_text = "".join([item[0] for item in self.ProgramChunks])
                 if filepath is not None:
-                    programfile = open(filepath, "w")
-                    programfile.write(program_text.encode("utf-8"))
+                    programfile = open(filepath, "w", encoding='utf-8')
+                    programfile.write(program_text)
                     programfile.close()
                     self.ProgramFilePath = filepath
                 return program_text, errors, warnings
-            except PLCGenException as ex:
+            except Exception as ex:
+                print(traceback.format_exc())
                 errors.append(ex)
         else:
             errors.append("No project opened")
@@ -489,7 +493,8 @@ class PLCControler(object):
             else:
                 next_row = row
                 next_col = col + len(chunk)
-            if (next_row > from_location[0] or next_row == from_location[0] and next_col >= from_location[1]) and len(chunk_infos) > 0:
+            if (next_row > from_location[0] or next_row == from_location[0] and next_col >= from_location[1]) and len(
+                    chunk_infos) > 0:
                 infos.append((chunk_infos, (row, col)))
             if next_row == to_location[0] and next_col > to_location[1] or next_row > to_location[0]:
                 return infos
@@ -532,7 +537,26 @@ class PLCControler(object):
         if self.Project is not None:
             pou = self.Project.getpou(name)
             if pou is not None:
-                pou.setpouType(pou_type)
+                new_pou = self.Copy(pou)
+                idx = 0
+                new_name = name + "_" + pou_type
+                while self.Project.getpou(new_name) is not None:
+                    idx += 1
+                    new_name = "%s%d" % (name, idx)
+                new_pou.setname(new_name)
+
+                orig_type = pou.getpouType()
+                if orig_type == 'function' and pou_type in ['functionBlock', 'program']:
+                    # delete return type
+                    return_type_obj = new_pou.interface.getreturnType()
+                    new_pou.interface.remove(return_type_obj)
+                    # To be ultimately correct we could re-create an
+                    # output variable with same name+_out or so
+                    # but in any case user will have to connect/assign
+                    # this output, so better leave it as-is
+
+                new_pou.setpouType(pou_type)
+                self.Project.insertpou(0, new_pou)
                 self.BufferProject()
 
     def GetPouXml(self, pou_name):
@@ -574,7 +598,7 @@ class PLCControler(object):
             # function blocks cannot be pasted as functions,
             # programs cannot be pasted as functions or function blocks
             if orig_type == 'functionBlock' and pou_type == 'function' or \
-               orig_type == 'program' and pou_type in ['function', 'functionBlock']:
+                    orig_type == 'program' and pou_type in ['function', 'functionBlock']:
                 msg = _('''{a1} "{a2}" can't be pasted as a {a3}.''').format(a1=orig_type, a2=name, a3=pou_type)
                 return msg
 
@@ -927,6 +951,7 @@ class PLCControler(object):
             current_varlist.appendvariable(tempvar)
         return varlist_list
 
+    # @functools.lru_cache(maxsize=5)
     def GetVariableDictionary(self, object_with_vars, tree=False, debug=False):
         variables = []
         self.VariableInfoCollector.Collect(object_with_vars,
@@ -955,6 +980,14 @@ class PLCControler(object):
                 configuration.setglobalVars([
                     varlist for _vartype, varlist
                     in self.ExtractVarLists(vars)])
+
+    def SetConfigurationGlobalVar(self, name, var):
+        if self.Project is not None:
+            # Found the configuration corresponding to name
+            configuration = self.Project.getconfiguration(name)
+            if configuration is not None:
+                # Set configuration global vars
+                configuration.setglobalVars(var)
 
     # Return the configuration globalvars
     def GetConfigurationGlobalVars(self, name, debug=False):
@@ -990,9 +1023,17 @@ class PLCControler(object):
             resource = self.Project.getconfigurationResource(config_name, name)
             # Set resource global vars
             if resource is not None:
-                resource.setglobalVars([
-                    varlist for _vartype, varlist
-                    in self.ExtractVarLists(vars)])
+                _vars = self.ExtractVarLists(vars)
+                var = [varlist for _vartype, varlist in _vars]
+                resource.setglobalVars(var)
+
+    def SetConfigurationResourceGlobalVar(self, config_name, name, var):
+        if self.Project is not None:
+            # Found the resource corresponding to name
+            resource = self.Project.getconfigurationResource(config_name, name)
+            # Set resource global vars
+            if resource is not None:
+                resource.setglobalVars(var)
 
     # Return the resource globalvars
     def GetConfigurationResourceGlobalVars(self, config_name, name, debug=False):
@@ -1042,7 +1083,18 @@ class PLCControler(object):
                 if pou.interface is None:
                     pou.interface = PLCOpenParser.CreateElement("interface", "pou")
                 # Set Pou interface
-                pou.setvars([varlist for _varlist_type, varlist in self.ExtractVarLists(vars)])
+                lt = [varlist for _varlist_type, varlist in self.ExtractVarLists(vars)]
+                pou.setvars(lt)
+
+    def SetPouInterfaceVar(self, name, row, var):
+        if self.Project is not None:
+            # Found the pou corresponding to name and add interface if there isn't one yet
+            pou = self.Project.getpou(name)
+            if pou is not None:
+                if pou.interface is None:
+                    pou.interface = PLCOpenParser.CreateElement("interface", "pou")
+                # Set Pou interface
+                pou.setvar(row, var)
 
     # Replace the return type of the pou given by its name (only for functions)
     def SetPouInterfaceReturnType(self, name, return_type):
@@ -1077,6 +1129,7 @@ class PLCControler(object):
             pou.updateElementName(old_name, new_name)
 
     # Return the return type of the given pou
+    # @functools.lru_cache(maxsize=5)
     def GetPouInterfaceReturnType(self, pou, tree=False, debug=False):
         # Verify that the pou has an interface
         if pou.interface is not None:
@@ -1126,6 +1179,7 @@ class PLCControler(object):
     def GetConfNodeGlobalInstances(self):
         return []
 
+    # @functools.lru_cache(maxsize=5)
     def GetConfigurationExtraVariables(self):
         global_vars = []
         for var_name, var_type, var_initial in self.GetConfNodeGlobalInstances():
@@ -1158,7 +1212,9 @@ class PLCControler(object):
         for _sectioname, blocktype in self.TotalTypesDict.get(typename, []):
             if inputs is not None and inputs != "undefined":
                 block_inputs = tuple([var_type for _name, var_type, _modifier in blocktype["inputs"]])
-                if reduce(lambda x, y: x and y, map(lambda x: x[0] == "ANY" or self.IsOfType(*x), zip(inputs, block_inputs)), True):
+                if reduce(lambda x, y: x and y,
+                          list(map(lambda x: x[0] == "ANY" or self.IsOfType(*x), list(zip(inputs, block_inputs)))),
+                          True):
                     return blocktype
             else:
                 if result_blocktype:
@@ -1221,7 +1277,7 @@ class PLCControler(object):
         if project is not None and words[0] in ["P", "T", "A"]:
             name = words[1]
         blocktypes = []
-        for blocks in self.TotalTypesDict.itervalues():
+        for blocks in list(self.TotalTypesDict.values()):
             for _sectioname, block in blocks:
                 if block["type"] == "functionBlock":
                     blocktypes.append(block["name"])
@@ -1276,7 +1332,7 @@ class PLCControler(object):
             result = project.getpou(typename)
             if result is not None:
                 return result
-        for standardlibrary in StdBlckLibs.values():
+        for standardlibrary in list(StdBlckLibs.values()):
             result = standardlibrary.getpou(typename)
             if result is not None:
                 return result
@@ -1350,7 +1406,7 @@ class PLCControler(object):
         return False
 
     def IsEndType(self, typename):
-        if typename is not None:
+        if typename is not None and isinstance(typename,str):
             return not typename.startswith("ANY")
         return True
 
@@ -1409,7 +1465,7 @@ class PLCControler(object):
         return False
 
     def IsNumType(self, typename, debug=False):
-        return self.IsOfType(typename, "ANY_NUM", debug) or\
+        return self.IsOfType(typename, "ANY_NUM", debug) or \
                self.IsOfType(typename, "ANY_BIT", debug)
 
     def GetDataTypeRange(self, typename, debug=False):
@@ -1429,7 +1485,7 @@ class PLCControler(object):
 
     # Return Subrange types
     def GetSubrangeBaseTypes(self, exclude, debug=False):
-        subrange_basetypes = DataTypeRange.keys()
+        subrange_basetypes = list(DataTypeRange.keys())
         project = self.GetProject(debug)
         if project is not None:
             subrange_basetypes.extend(
@@ -1452,8 +1508,8 @@ class PLCControler(object):
                 if basetype_content_type == "enum":
                     return [value.getname()
                             for value in basetype_content.xpath(
-                                "ppx:values/ppx:value",
-                                namespaces=PLCOpenParser.NSMAP)]
+                            "ppx:values/ppx:value",
+                            namespaces=PLCOpenParser.NSMAP)]
                 elif basetype_content_type == "derived":
                     return self.GetEnumeratedDataValues(basetype_content.getname(), debug)
         else:
@@ -1531,6 +1587,11 @@ class PLCControler(object):
                             element_infos["Initial Value"] = element.initialValue.getvalue()
                         else:
                             element_infos["Initial Value"] = ""
+                        if element.documentation is not None:
+                            element_infos["documentation"] = element.documentation.getanyText()
+                        else:
+                            element_infos["documentation"] = ""
+
                         infos["elements"].append(element_infos)
                 else:
                     infos["type"] = "Directly"
@@ -1653,6 +1714,10 @@ class PLCControler(object):
                         value = PLCOpenParser.CreateElement("initialValue", "variable")
                         value.setvalue(element_infos["Initial Value"])
                         element.setinitialValue(value)
+                    if element_infos["documentation"] != "":
+                        value = PLCOpenParser.CreateElement("documentation", "variable")
+                        value.setanyText(element_infos["documentation"])
+                        element.setdocumentation(value)
                     if i == 0:
                         struct.setvariable([element])
                     else:
@@ -1663,6 +1728,12 @@ class PLCControler(object):
                 datatype.initialValue.setvalue(infos["initial"])
             else:
                 datatype.initialValue = None
+            if infos["documentation"] != "":
+                if datatype.documentation is None:
+                    datatype.documentation = PLCOpenParser.CreateElement("documentation", "dataType")
+                datatype.documentation.setanyText(infos["documentation"])
+            else:
+                datatype.documentation = None
             self.BufferProject()
 
     # -------------------------------------------------------------------------------
@@ -1836,8 +1907,8 @@ class PLCControler(object):
                     for instance in element.getinstances():
                         if isinstance(
                                 instance,
-                                (PLCOpenParser.GetElementClass("step",         "sfcObjects"),
-                                 PLCOpenParser.GetElementClass("connector",    "commonObjects"),
+                                (PLCOpenParser.GetElementClass("step", "sfcObjects"),
+                                 PLCOpenParser.GetElementClass("connector", "commonObjects"),
                                  PLCOpenParser.GetElementClass("continuation", "commonObjects"))):
                             names[instance.getname().upper()] = True
             elif words[0] == 'R':
@@ -1944,9 +2015,9 @@ class PLCControler(object):
                 new_pos[0] -= width // 2
                 new_pos[1] -= height // 2
             else:
-                new_pos = map(lambda x: x + 30, new_pos)
+                new_pos = list(map(lambda x: x + 30, new_pos))
             if scaling[0] != 0 and scaling[1] != 0:
-                min_pos = map(lambda x: 30 / x, scaling)
+                min_pos = list(map(lambda x: 30 / x, scaling))
                 minx = round(min_pos[0])
                 if int(min_pos[0]) == round(min_pos[0]):
                     minx += 1
@@ -1970,6 +2041,7 @@ class PLCControler(object):
 
             return new_id, connections
 
+    # @functools.lru_cache(maxsize=5)
     def GetEditedElementInstancesInfos(self, tagname, debug=False):
         element = self.GetEditedElement(tagname, debug)
         if element is not None:
@@ -2480,7 +2552,7 @@ class PLCControler(object):
                  SELECTION_CONVERGENCE: "selectionConvergence",
                  SIMULTANEOUS_DIVERGENCE: "simultaneousDivergence",
                  SIMULTANEOUS_CONVERGENCE: "simultaneousConvergence"}.get(
-                     divergence_type), "sfcObjects")
+                    divergence_type), "sfcObjects")
             divergence.setlocalId(id)
             element.addinstance(divergence)
 
@@ -2631,17 +2703,17 @@ class PLCControler(object):
                 new_task.setname(task["Name"])
                 if task["Triggering"] == "Interrupt":
                     new_task.setsingle(task["Single"])
-#                result = duration_model.match(task["Interval"]).groups()
-#                if reduce(lambda x, y: x or y != None, result):
-#                    values = []
-#                    for value in result[:-1]:
-#                        if value != None:
-#                            values.append(int(value))
-#                        else:
-#                            values.append(0)
-#                    if result[-1] is not None:
-#                        values.append(int(float(result[-1]) * 1000))
-#                    new_task.setinterval(datetime.time(*values))
+                #                result = duration_model.match(task["Interval"]).groups()
+                #                if reduce(lambda x, y: x or y != None, result):
+                #                    values = []
+                #                    for value in result[:-1]:
+                #                        if value != None:
+                #                            values.append(int(value))
+                #                        else:
+                #                            values.append(0)
+                #                    if result[-1] is not None:
+                #                        values.append(int(float(result[-1]) * 1000))
+                #                    new_task.setinterval(datetime.time(*values))
                 if task["Triggering"] == "Cyclic":
                     new_task.setinterval(task["Interval"])
                 new_task.setpriority(int(task["Priority"]))

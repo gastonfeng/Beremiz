@@ -23,27 +23,21 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
-from __future__ import division
 import re
-from builtins import str as text
 
 import wx
 import wx.grid
-import wx.stc as stc
 import wx.lib.buttons
-from six.moves import xrange
+import wx.stc as stc
 
-
-from plcopen.plcopen import TestTextElement
-from plcopen.structures import TestIdentifier, IEC_KEYWORDS, DefaultType
 from controls import CustomGrid, CustomTable
 from controls.CustomStyledTextCtrl import CustomStyledTextCtrl, faces, GetCursorPos, NAVIGATION_KEYS
 from editors.ConfTreeNodeEditor import ConfTreeNodeEditor
+from graphics.GraphicCommons import ERROR_HIGHLIGHT, SEARCH_RESULT_HIGHLIGHT, REFRESH_HIGHLIGHT_PERIOD
+from plcopen.plcopen import TestTextElement
+from plcopen.structures import TestIdentifier, IEC_KEYWORDS, DefaultType
 from util.BitmapLibrary import GetBitmap
 from util.TranslationCatalogs import NoTranslate
-from graphics.GraphicCommons import ERROR_HIGHLIGHT, SEARCH_RESULT_HIGHLIGHT, REFRESH_HIGHLIGHT_PERIOD
-
 
 [STC_CODE_ERROR, STC_CODE_SEARCH_RESULT,
  STC_CODE_SECTION] = range(15, 18)
@@ -73,7 +67,6 @@ def GetSectionsText(controler, sections_headers):
 
 
 class CodeEditor(CustomStyledTextCtrl):
-
     KEYWORDS = []
     COMMENT_HEADER = ""
 
@@ -100,13 +93,13 @@ class CodeEditor(CustomStyledTextCtrl):
         self.SetMarginWidth(2, 12)
 
         # Like a flattened tree control using square headers
-        self.MarkerDefine(stc.STC_MARKNUM_FOLDEROPEN,    stc.STC_MARK_BOXMINUS,          "white", "#808080")
-        self.MarkerDefine(stc.STC_MARKNUM_FOLDER,        stc.STC_MARK_BOXPLUS,           "white", "#808080")
-        self.MarkerDefine(stc.STC_MARKNUM_FOLDERSUB,     stc.STC_MARK_VLINE,             "white", "#808080")
-        self.MarkerDefine(stc.STC_MARKNUM_FOLDERTAIL,    stc.STC_MARK_LCORNER,           "white", "#808080")
-        self.MarkerDefine(stc.STC_MARKNUM_FOLDEREND,     stc.STC_MARK_BOXPLUSCONNECTED,  "white", "#808080")
+        self.MarkerDefine(stc.STC_MARKNUM_FOLDEROPEN, stc.STC_MARK_BOXMINUS, "white", "#808080")
+        self.MarkerDefine(stc.STC_MARKNUM_FOLDER, stc.STC_MARK_BOXPLUS, "white", "#808080")
+        self.MarkerDefine(stc.STC_MARKNUM_FOLDERSUB, stc.STC_MARK_VLINE, "white", "#808080")
+        self.MarkerDefine(stc.STC_MARKNUM_FOLDERTAIL, stc.STC_MARK_LCORNER, "white", "#808080")
+        self.MarkerDefine(stc.STC_MARKNUM_FOLDEREND, stc.STC_MARK_BOXPLUSCONNECTED, "white", "#808080")
         self.MarkerDefine(stc.STC_MARKNUM_FOLDEROPENMID, stc.STC_MARK_BOXMINUSCONNECTED, "white", "#808080")
-        self.MarkerDefine(stc.STC_MARKNUM_FOLDERMIDTAIL, stc.STC_MARK_TCORNER,           "white", "#808080")
+        self.MarkerDefine(stc.STC_MARKNUM_FOLDERMIDTAIL, stc.STC_MARK_TCORNER, "white", "#808080")
 
         self.Bind(stc.EVT_STC_UPDATEUI, self.OnUpdateUI)
         self.Bind(stc.EVT_STC_MARGINCLICK, self.OnMarginClick)
@@ -117,15 +110,15 @@ class CodeEditor(CustomStyledTextCtrl):
         # Scintilla sample property files.
 
         # Global default styles for all languages
-        self.StyleSetSpec(stc.STC_STYLE_DEFAULT,     "face:%(mono)s,size:%(size)d" % faces)
+        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, "face:%(mono)s,size:%(size)d" % faces)
         self.StyleClearAll()  # Reset all to be like the default
 
         # Global default styles for all languages
-        self.StyleSetSpec(stc.STC_STYLE_DEFAULT,     "face:%(mono)s,size:%(size)d" % faces)
-        self.StyleSetSpec(stc.STC_STYLE_LINENUMBER,  "back:#C0C0C0,face:%(helv)s,size:%(size)d" % faces)
+        self.StyleSetSpec(stc.STC_STYLE_DEFAULT, "face:%(mono)s,size:%(size)d" % faces)
+        self.StyleSetSpec(stc.STC_STYLE_LINENUMBER, "back:#C0C0C0,face:%(helv)s,size:%(size)d" % faces)
         self.StyleSetSpec(stc.STC_STYLE_CONTROLCHAR, "face:%(mono)s" % faces)
-        self.StyleSetSpec(stc.STC_STYLE_BRACELIGHT,  "fore:#FFFFFF,back:#0000FF,bold")
-        self.StyleSetSpec(stc.STC_STYLE_BRACEBAD,    "fore:#000000,back:#FF0000,bold")
+        self.StyleSetSpec(stc.STC_STYLE_BRACELIGHT, "fore:#FFFFFF,back:#0000FF,bold")
+        self.StyleSetSpec(stc.STC_STYLE_BRACEBAD, "fore:#000000,back:#FF0000,bold")
 
         # Highlighting styles
         self.StyleSetSpec(STC_CODE_ERROR, 'fore:#FF0000,back:#FFFF00,size:%(size)d' % faces)
@@ -285,7 +278,8 @@ class CodeEditor(CustomStyledTextCtrl):
     def RefreshSectionStyling(self):
         self.Colourise(0, -1)
 
-        for line in xrange(self.GetLineCount()):
+        text = self.GetText()
+        for line in range(self.GetLineCount()):
             self.SetLineState(line, 0)
 
         doc_end_pos = self.GetLength()
@@ -301,7 +295,7 @@ class CodeEditor(CustomStyledTextCtrl):
         self.SetStyling(doc_end_pos - end_pos, stc.STC_STYLE_DEFAULT)
 
     def DoGetBestSize(self):
-        return self.ParentWindow.GetPanelBestSize()
+        return self.ParentWindow.GetBestSize()
 
     def RefreshModel(self):
         text = self.GetText()
@@ -333,8 +327,8 @@ class CodeEditor(CustomStyledTextCtrl):
 
         # Disable to type any character in section header lines
         if self.GetLineState(self.LineFromPosition(current_pos)) and \
-           not text_selected and \
-           key not in NAVIGATION_KEYS + [wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER]:
+                not text_selected and \
+                key not in NAVIGATION_KEYS + [wx.WXK_RETURN, wx.WXK_NUMPAD_ENTER]:
             return
 
         # Disable to delete line between code and header lines
@@ -437,7 +431,7 @@ class CodeEditor(CustomStyledTextCtrl):
         while lineNum < lineCount:
             level = self.GetFoldLevel(lineNum)
             if level & stc.STC_FOLDLEVELHEADERFLAG and \
-               (level & stc.STC_FOLDLEVELNUMBERMASK) == stc.STC_FOLDLEVELBASE:
+                    (level & stc.STC_FOLDLEVELNUMBERMASK) == stc.STC_FOLDLEVELBASE:
 
                 if expanding:
                     self.SetFoldExpanded(lineNum, True)
@@ -448,7 +442,7 @@ class CodeEditor(CustomStyledTextCtrl):
                     self.SetFoldExpanded(lineNum, False)
 
                     if lastChild > lineNum:
-                        self.HideLines(lineNum+1, lastChild)
+                        self.HideLines(lineNum + 1, lastChild)
 
             lineNum = lineNum + 1
 
@@ -476,13 +470,13 @@ class CodeEditor(CustomStyledTextCtrl):
                     else:
                         self.SetFoldExpanded(line, False)
 
-                    line = self.Expand(line, doExpand, force, visLevels-1)
+                    line = self.Expand(line, doExpand, force, visLevels - 1)
 
                 else:
                     if doExpand and self.GetFoldExpanded(line):
-                        line = self.Expand(line, True, force, visLevels-1)
+                        line = self.Expand(line, True, force, visLevels - 1)
                     else:
-                        line = self.Expand(line, False, force, visLevels-1)
+                        line = self.Expand(line, False, force, visLevels - 1)
             else:
                 line = line + 1
 
@@ -569,7 +563,8 @@ class CodeEditor(CustomStyledTextCtrl):
         else:
             highlight_type = HIGHLIGHT_TYPES.get(highlight_type, None)
             if highlight_type is not None:
-                self.Highlights = [(start, end, highlight) for (start, end, highlight) in self.Highlights if highlight != highlight_type]
+                self.Highlights = [(start, end, highlight) for (start, end, highlight) in self.Highlights if
+                                   highlight != highlight_type]
         self.RefreshView()
 
     def AddHighlight(self, start, end, highlight_type):
@@ -583,7 +578,7 @@ class CodeEditor(CustomStyledTextCtrl):
     def RemoveHighlight(self, start, end, highlight_type):
         highlight_type = HIGHLIGHT_TYPES.get(highlight_type, None)
         if highlight_type is not None and \
-           (start, end, highlight_type) in self.Highlights:
+                (start, end, highlight_type) in self.Highlights:
             self.Highlights.remove((start, end, highlight_type))
             self.RefreshHighlightsTimer.Start(int(REFRESH_HIGHLIGHT_PERIOD * 1000), oneShot=True)
 
@@ -638,9 +633,9 @@ class VariablesTable(CustomTable):
             if col == 0:
                 return row + 1
             else:
-                return text(self.data[row].get(self.GetColLabelValue(col, False), ""))
+                return str(self.data[row].get(self.GetColLabelValue(col, False), ""))
 
-    def _updateColAttrs(self, grid):
+    def _updateColAttrs(self, grid, row=None):
         """
         wxGrid -> update the column attributes to add the
         appropriate renderer given the column name.
@@ -678,24 +673,24 @@ class VariablesEditor(wx.Panel):
         main_sizer.AddGrowableRow(0)
 
         controls_sizer = wx.BoxSizer(wx.VERTICAL)
-        main_sizer.AddSizer(controls_sizer, border=5, flag=wx.ALL)
+        main_sizer.Add(controls_sizer, border=5, flag=wx.ALL)
 
         for name, bitmap, help in [
-                ("AddVariableButton", "add_element", _("Add variable")),
-                ("DeleteVariableButton", "remove_element", _("Remove variable")),
-                ("UpVariableButton", "up", _("Move variable up")),
-                ("DownVariableButton", "down", _("Move variable down"))]:
+            ("AddVariableButton", "add_element", _("Add variable")),
+            ("DeleteVariableButton", "remove_element", _("Remove variable")),
+            ("UpVariableButton", "up", _("Move variable up")),
+            ("DownVariableButton", "down", _("Move variable down"))]:
             button = wx.lib.buttons.GenBitmapButton(self, bitmap=GetBitmap(bitmap),
                                                     size=wx.Size(28, 28), style=wx.NO_BORDER)
-            button.SetToolTipString(help)
+            button.SetToolTip(help)
             setattr(self, name, button)
-            controls_sizer.AddWindow(button, border=5, flag=wx.BOTTOM)
+            controls_sizer.Add(button, border=5, flag=wx.BOTTOM)
 
         self.VariablesGrid = CustomGrid(self, style=wx.VSCROLL)
-        self.VariablesGrid.Bind(wx.grid.EVT_GRID_CELL_CHANGE, self.OnVariablesGridCellChange)
+        self.VariablesGrid.Bind(wx.grid.EVT_GRID_CELL_CHANGED, self.OnVariablesGridCellChange)
         self.VariablesGrid.Bind(wx.grid.EVT_GRID_CELL_LEFT_CLICK, self.OnVariablesGridCellLeftClick)
         self.VariablesGrid.Bind(wx.grid.EVT_GRID_EDITOR_SHOWN, self.OnVariablesGridEditorShown)
-        main_sizer.AddWindow(self.VariablesGrid, flag=wx.GROW)
+        main_sizer.Add(self.VariablesGrid, flag=wx.GROW)
 
         self.SetSizer(main_sizer)
 
@@ -703,18 +698,18 @@ class VariablesEditor(wx.Panel):
         self.Controler = controler
 
         self.VariablesDefaultValue = {
-            "Name":        "LocalVar0",
-            "Type":        DefaultType,
-            "Initial":     "",
+            "Name": "LocalVar0",
+            "Type": DefaultType,
+            "Initial": "",
             "Description": "",
-            "OnChange":    "",
-            "Options":     ""
+            "OnChange": "",
+            "Options": ""
         }
 
         self.Table = VariablesTable(self, [], self.GetVariableTableColnames(), additional_columns=additional_columns)
-        self.ColAlignements = [wx.ALIGN_RIGHT] +  \
-                              [wx.ALIGN_LEFT]*(len(self.VariablesDefaultValue))
-        self.ColSizes = [20, 150] + [130]*(len(self.VariablesDefaultValue)-1)
+        self.ColAlignements = [wx.ALIGN_RIGHT] + \
+                              [wx.ALIGN_LEFT] * (len(self.VariablesDefaultValue))
+        self.ColSizes = [20, 150] + [130] * (len(self.VariablesDefaultValue) - 1)
         self.VariablesGrid.SetTable(self.Table)
         self.VariablesGrid.SetButtons({"Add": self.AddVariableButton,
                                        "Delete": self.DeleteVariableButton,
@@ -725,20 +720,22 @@ class VariablesEditor(wx.Panel):
             if new_row > 0:
                 row_content = self.Table.data[new_row - 1].copy()
                 old_name = row_content['Name']
-                row_content['Name'] =\
-                    self.Controler.GenerateNewName(old_name, old_name+'%d')
+                row_content['Name'] = \
+                    self.Controler.GenerateNewName(old_name, old_name + '%d')
             else:
                 row_content = self.VariablesDefaultValue.copy()
             self.Table.InsertRow(new_row, row_content)
             self.RefreshModel()
             self.RefreshView()
             return new_row
+
         setattr(self.VariablesGrid, "_AddRow", _AddVariable)
 
         def _DeleteVariable(row):
             self.Table.RemoveRow(row)
             self.RefreshModel()
             self.RefreshView()
+
         setattr(self.VariablesGrid, "_DeleteRow", _DeleteVariable)
 
         def _MoveVariable(row, move):
@@ -747,6 +744,7 @@ class VariablesEditor(wx.Panel):
                 self.RefreshModel()
                 self.RefreshView()
             return new_row
+
         setattr(self.VariablesGrid, "_MoveRow", _MoveVariable)
 
         self.VariablesGrid.SetRowLabelSize(0)
@@ -785,7 +783,7 @@ class VariablesEditor(wx.Panel):
         self.VariablesGrid.RefreshButtons()
 
     def DoGetBestSize(self):
-        return self.ParentWindow.GetPanelBestSize()
+        return self.ParentWindow.GetBestSize()
 
     def ShowErrorMessage(self, message):
         dialog = wx.MessageDialog(self, message, _("Error"), wx.OK | wx.ICON_ERROR)
@@ -826,19 +824,19 @@ class VariablesEditor(wx.Panel):
             type_menu = wx.Menu(title='')
             base_menu = wx.Menu(title='')
             for base_type in self.Controler.GetBaseTypes():
-                new_id = wx.NewId()
-                base_menu.Append(help='', id=new_id, kind=wx.ITEM_NORMAL, text=base_type)
+                new_id = wx.NewIdRef()
+                base_menu.Append(helpString='', id=new_id, kind=wx.ITEM_NORMAL, item=base_type)
                 self.Bind(wx.EVT_MENU, self.GetVariableTypeFunction(base_type), id=new_id)
-            type_menu.AppendMenu(wx.NewId(), "Base Types", base_menu)
+            type_menu.Append(wx.NewIdRef(), "Base Types", base_menu)
             datatype_menu = wx.Menu(title='')
             for datatype in self.Controler.GetDataTypes():
-                new_id = wx.NewId()
-                datatype_menu.Append(help='', id=new_id, kind=wx.ITEM_NORMAL, text=datatype)
+                new_id = wx.NewIdRef()
+                datatype_menu.Append(helpString='', id=new_id, kind=wx.ITEM_NORMAL, item=datatype)
                 self.Bind(wx.EVT_MENU, self.GetVariableTypeFunction(datatype), id=new_id)
-            type_menu.AppendMenu(wx.NewId(), "User Data Types", datatype_menu)
+            type_menu.Append(wx.NewIdRef(), "User Data Types", datatype_menu)
             rect = self.VariablesGrid.BlockToDeviceRect((row, col), (row, col))
 
-            self.VariablesGrid.PopupMenuXY(type_menu, rect.x + rect.width, rect.y + self.VariablesGrid.GetColLabelSize())
+            self.VariablesGrid.PopupMenu(type_menu, rect.x + rect.width, rect.y + self.VariablesGrid.GetColLabelSize())
             type_menu.Destroy()
             event.Veto()
         else:
@@ -852,6 +850,7 @@ class VariablesEditor(wx.Panel):
             self.RefreshModel()
             self.RefreshView()
             event.Skip()
+
         return VariableTypeFunction
 
     def OnVariablesGridCellLeftClick(self, event):
@@ -882,13 +881,13 @@ class VariablesEditor(wx.Panel):
         self.Table.ClearHighlights(highlight_type)
         self.Table.ResetView(self.VariablesGrid)
 
+
 # -------------------------------------------------------------------------------
 #                          CodeFileEditor Main Frame Class
 # -------------------------------------------------------------------------------
 
 
 class CodeFileEditor(ConfTreeNodeEditor):
-
     CONFNODEEDITOR_TABS = []
     CODE_EDITOR = None
     COLUMNS_TYPE = None

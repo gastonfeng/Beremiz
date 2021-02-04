@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
-<project xmlns:ns1="http://www.plcopen.org/xml/tc6_0201" xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns="http://www.plcopen.org/xml/tc6_0201">
+<project xmlns:xhtml="http://www.w3.org/1999/xhtml" xmlns="http://www.plcopen.org/xml/tc6_0201">
   <fileHeader companyName="Beremiz" productName="Beremiz" productVersion="1" creationDateTime="2016-10-24T18:09:22"/>
-  <contentHeader name="First Steps" modificationDateTime="2018-09-26T12:52:51">
+    <contentHeader name="First Steps" modificationDateTime="2020-11-05T14:32:37">
     <coordinateInfo>
       <fbd>
         <scaling x="0" y="0"/>
@@ -121,11 +121,6 @@
                 <derived name="CounterSFC"/>
               </type>
             </variable>
-            <variable name="CounterIL0">
-              <type>
-                <derived name="CounterIL"/>
-              </type>
-            </variable>
             <variable name="CounterLD0">
               <type>
                 <derived name="CounterLD"/>
@@ -230,28 +225,6 @@ If reset is False, counter is incremented every cycle.
                 <variable formalParameter="OUT">
                   <connectionPointOut>
                     <relPosition x="121" y="36"/>
-                  </connectionPointOut>
-                </variable>
-              </outputVariables>
-            </block>
-            <block localId="9" typeName="CounterIL" instanceName="CounterIL0" executionOrderId="0" height="62" width="121">
-              <position x="211" y="322"/>
-              <inputVariables>
-                <variable formalParameter="Reset">
-                  <connectionPointIn>
-                    <relPosition x="0" y="41"/>
-                    <connection refLocalId="10">
-                      <position x="211" y="363"/>
-                      <position x="101" y="363"/>
-                    </connection>
-                  </connectionPointIn>
-                </variable>
-              </inputVariables>
-              <inOutVariables/>
-              <outputVariables>
-                <variable formalParameter="OUT">
-                  <connectionPointOut>
-                    <relPosition x="121" y="41"/>
                   </connectionPointOut>
                 </variable>
               </outputVariables>
@@ -421,10 +394,6 @@ If reset is False, counter is incremented every cycle.
               <position x="378" y="348"/>
               <connectionPointIn>
                 <relPosition x="0" y="15"/>
-                <connection refLocalId="9" formalParameter="OUT">
-                  <position x="378" y="363"/>
-                  <position x="332" y="363"/>
-                </connection>
               </connectionPointIn>
               <connectionPointOut>
                 <relPosition x="91" y="15"/>
@@ -907,59 +876,6 @@ Out := Cnt;]]></xhtml:p>
           </SFC>
         </body>
       </pou>
-      <pou name="CounterIL" pouType="functionBlock">
-        <interface>
-          <localVars>
-            <variable name="Cnt">
-              <type>
-                <INT/>
-              </type>
-            </variable>
-          </localVars>
-          <inputVars>
-            <variable name="Reset">
-              <type>
-                <BOOL/>
-              </type>
-            </variable>
-          </inputVars>
-          <outputVars>
-            <variable name="OUT">
-              <type>
-                <INT/>
-              </type>
-            </variable>
-          </outputVars>
-          <externalVars constant="true">
-            <variable name="ResetCounterValue">
-              <type>
-                <INT/>
-              </type>
-            </variable>
-          </externalVars>
-        </interface>
-        <body>
-          <IL>
-            <xhtml:p><![CDATA[LD Reset
-JMPC ResetCnt
-
-(* increment counter *)
-LD Cnt
-ADD 1
-JMP QuitFb
-
-ResetCnt:
-(* reset counter *)
-LD ResetCounterValue
-
-QuitFb:
-(* save results *)
-ST Cnt
-ST Out
-]]></xhtml:p>
-          </IL>
-        </body>
-      </pou>
       <pou name="CounterLD" pouType="functionBlock">
         <interface>
           <inputVars>
@@ -1143,17 +1059,17 @@ ST Out
           <task name="plc_task" priority="1" interval="T#100ms">
             <pouInstance name="plc_task_instance" typeName="plc_prg"/>
           </task>
+          <globalVars constant="true">
+            <variable name="ResetCounterValue">
+              <type>
+                <INT/>
+              </type>
+              <initialValue>
+                <simpleValue value="17"/>
+              </initialValue>
+            </variable>
+          </globalVars>
         </resource>
-        <globalVars constant="true">
-          <variable name="ResetCounterValue">
-            <type>
-              <INT/>
-            </type>
-            <initialValue>
-              <simpleValue value="17"/>
-            </initialValue>
-          </variable>
-        </globalVars>
       </configuration>
     </configurations>
   </instances>

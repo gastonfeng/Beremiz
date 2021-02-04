@@ -23,18 +23,15 @@
 # This code is made available on the understanding that it will not be
 # used in safety-critical situations without a full and competent review.
 
-from __future__ import absolute_import
+# from __future__ import absolute_import
 
 import os
-from collections import Counter
-from datetime import datetime
 import pickle
-
-import wx
+from datetime import datetime
 
 from bacnet.BacnetSlaveEditor import *
-from bacnet.BacnetSlaveEditor import ObjectProperties
-from PLCControler import LOCATION_CONFNODE, LOCATION_VAR_MEMORY
+from plcopen.types_enums import LOCATION_CONFNODE, LOCATION_VAR_MEMORY
+from util import paths
 
 base_folder = os.path.split(
     os.path.dirname(os.path.realpath(__file__)))[0]
@@ -49,6 +46,10 @@ BacnetIncludePortPath = os.path.join(BacnetIncludePortPath, "linux")
 BACNET_VENDOR_ID = 9999
 BACNET_VENDOR_NAME = "Beremiz.org"
 BACNET_DEVICE_MODEL_NAME = "Beremiz PLC"
+
+# Max String Size of BACnet Paramaters
+BACNET_PARAM_STRING_SIZE = 64
+
 
 #
 #
@@ -66,7 +67,7 @@ BACNET_DEVICE_MODEL_NAME = "Beremiz PLC"
 
 
 class RootClass(object):
-    XSD = """<?xml version="1.0" encoding="ISO-8859-1" ?>
+    XSD = """<?xml version="1.0" encoding="utf-8" ?>
     <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
       <xsd:element name="BACnetServerNode">
         <xsd:complexType>
@@ -97,6 +98,14 @@ class RootClass(object):
       </xsd:element>
     </xsd:schema>
     """
+    # NOTE; Add the following code/declaration to the aboce XSD in order to activate the
+    #          Override_Parameters_Saved_on_PLC   flag (currenty not in use as it requires further
+    #          analysis how the user would interpret this user interface option.
+    #        <--- snip --->
+    #          <xsd:attribute name="Override_Parameters_Saved_on_PLC" 
+    #                                                   type="xsd:boolean" use="optional" default="true"/>
+    #        <--- snip --->
+    #
     # NOTE: BACnet device (object) IDs are 22 bits long (not counting the 10 bits for the type ID)
     #       so the Device instance ID is limited from 0 to 22^2-1 = 4194303
     #       However, 4194303 is reserved for special use (similar to NULL pointer), so last
@@ -193,17 +202,17 @@ class RootClass(object):
 
         self.ObjTables = {}
         self.ObjTables["AV_Obj"] = ObjectTable(
-            self, self.ObjTablesData["AV_Obj"],  AVObject)
+            self, self.ObjTablesData["AV_Obj"], AVObject)
         self.ObjTables["AO_Obj"] = ObjectTable(
-            self, self.ObjTablesData["AO_Obj"],  AOObject)
+            self, self.ObjTablesData["AO_Obj"], AOObject)
         self.ObjTables["AI_Obj"] = ObjectTable(
-            self, self.ObjTablesData["AI_Obj"],  AIObject)
+            self, self.ObjTablesData["AI_Obj"], AIObject)
         self.ObjTables["BV_Obj"] = ObjectTable(
-            self, self.ObjTablesData["BV_Obj"],  BVObject)
+            self, self.ObjTablesData["BV_Obj"], BVObject)
         self.ObjTables["BO_Obj"] = ObjectTable(
-            self, self.ObjTablesData["BO_Obj"],  BOObject)
+            self, self.ObjTablesData["BO_Obj"], BOObject)
         self.ObjTables["BI_Obj"] = ObjectTable(
-            self, self.ObjTablesData["BI_Obj"],  BIObject)
+            self, self.ObjTablesData["BI_Obj"], BIObject)
         self.ObjTables["MSV_Obj"] = ObjectTable(
             self, self.ObjTablesData["MSV_Obj"], MSVObject)
         self.ObjTables["MSO_Obj"] = ObjectTable(
@@ -236,25 +245,25 @@ class RootClass(object):
         # consider that all objects of type _BacnetSlavePlug will also be a
         # ConfigTreeNode).
         result = self.ChangesToSave \
-            or self.ObjTables["AV_Obj"].ChangesToSave \
-            or self.ObjTables["AO_Obj"].ChangesToSave \
-            or self.ObjTables["AI_Obj"].ChangesToSave \
-            or self.ObjTables["BV_Obj"].ChangesToSave \
-            or self.ObjTables["BO_Obj"].ChangesToSave \
-            or self.ObjTables["BI_Obj"].ChangesToSave \
-            or self.ObjTables["MSV_Obj"].ChangesToSave \
-            or self.ObjTables["MSO_Obj"].ChangesToSave \
-            or self.ObjTables["MSI_Obj"].ChangesToSave
+                 or self.ObjTables["AV_Obj"].ChangesToSave \
+                 or self.ObjTables["AO_Obj"].ChangesToSave \
+                 or self.ObjTables["AI_Obj"].ChangesToSave \
+                 or self.ObjTables["BV_Obj"].ChangesToSave \
+                 or self.ObjTables["BO_Obj"].ChangesToSave \
+                 or self.ObjTables["BI_Obj"].ChangesToSave \
+                 or self.ObjTables["MSV_Obj"].ChangesToSave \
+                 or self.ObjTables["MSO_Obj"].ChangesToSave \
+                 or self.ObjTables["MSI_Obj"].ChangesToSave
         return result
 
     # Currently not needed. Override _OpenView() in case we need to do some special stuff whenever the editor is opened!
     # def _OpenView(self, name=None, onlyopened=False):
-        # print "_BacnetSlavePlug._OpenView() Called!!!"
-        # ConfigTreeNode._OpenView(self, name, onlyopened)
-        # print self._View
-        # if self._View is not None:
-        #     self._View.SetBusId(self.GetCurrentLocation())
-        # return self._View
+    # print "_BacnetSlavePlug._OpenView() Called!!!"
+    # ConfigTreeNode._OpenView(self, name, onlyopened)
+    # print self._View
+    # if self._View is not None:
+    #     self._View.SetBusId(self.GetCurrentLocation())
+    # return self._View
 
     def GetVariableLocationTree(self):
         current_location = self.GetCurrentLocation()
@@ -295,17 +304,17 @@ class RootClass(object):
         BACnetEntries.append(self.GetSlaveLocationTree(
             self.ObjTablesData["AI_Obj"], 32, 'REAL', 'D', locstr + '.0', 'Analog Inputs'))
         BACnetEntries.append(self.GetSlaveLocationTree(
-            self.ObjTablesData["BV_Obj"],  1, 'BOOL', 'X', locstr + '.5', 'Binary Values'))
+            self.ObjTablesData["BV_Obj"], 1, 'BOOL', 'X', locstr + '.5', 'Binary Values'))
         BACnetEntries.append(self.GetSlaveLocationTree(
-            self.ObjTablesData["BO_Obj"],  1, 'BOOL', 'X', locstr + '.4', 'Binary Outputs'))
+            self.ObjTablesData["BO_Obj"], 1, 'BOOL', 'X', locstr + '.4', 'Binary Outputs'))
         BACnetEntries.append(self.GetSlaveLocationTree(
-            self.ObjTablesData["BI_Obj"],  1, 'BOOL', 'X', locstr + '.3', 'Binary Inputs'))
+            self.ObjTablesData["BI_Obj"], 1, 'BOOL', 'X', locstr + '.3', 'Binary Inputs'))
         BACnetEntries.append(self.GetSlaveLocationTree(
-            self.ObjTablesData["MSV_Obj"],  8, 'BYTE', 'B', locstr + '.19', 'Multi State Values'))
+            self.ObjTablesData["MSV_Obj"], 8, 'BYTE', 'B', locstr + '.19', 'Multi State Values'))
         BACnetEntries.append(self.GetSlaveLocationTree(
-            self.ObjTablesData["MSO_Obj"],  8, 'BYTE', 'B', locstr + '.14', 'Multi State Outputs'))
+            self.ObjTablesData["MSO_Obj"], 8, 'BYTE', 'B', locstr + '.14', 'Multi State Outputs'))
         BACnetEntries.append(self.GetSlaveLocationTree(
-            self.ObjTablesData["MSI_Obj"],  8, 'BYTE', 'B', locstr + '.13', 'Multi State Inputs'))
+            self.ObjTablesData["MSI_Obj"], 8, 'BYTE', 'B', locstr + '.13', 'Multi State Inputs'))
 
         return {"name": self.BaseParams.getName(),
                 "type": LOCATION_CONFNODE,
@@ -401,7 +410,7 @@ class RootClass(object):
         # derives/inherits from wx.grid.PyGridTableBase). Another reason not to store the whole
         # object is because it is not pickable (i.e. pickle.dump() cannot handle it)!!
         try:
-            fd = open(filepath,   "w")
+            fd = open(filepath, "wb")
             pickle.dump(self.ObjTablesData, fd)
             fd.close()
             # On successfull save, reset flags to indicate no more changes that
@@ -422,7 +431,7 @@ class RootClass(object):
     def LoadFromFile(self, filepath):
         # Load the data that is saved in SaveToFile()
         try:
-            fd = open(filepath,   "r")
+            fd = open(filepath, "rb")
             self.ObjTablesData = pickle.load(fd)
             fd.close()
             return True
@@ -435,14 +444,14 @@ class RootClass(object):
                                os.path.expanduser("~"),
                                "%s_EDE.csv" % self.CTNName(),
                                _("EDE files (*_EDE.csv)|*_EDE.csv|All files|*.*"),
-                               wx.SAVE | wx.OVERWRITE_PROMPT)
+                               wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
         if dialog.ShowModal() == wx.ID_OK:
             result = self.GenerateEDEFile(dialog.GetPath())
             result = False
             if result:
                 self.GetCTRoot().logger.write_error(
                     _("Error: Export slave failed\n"))
-        dialog.Destroy()
+        # dialog.Destroy()
 
     def GenerateEDEFile(self, filename):
         template_file_dir = os.path.join(
@@ -504,21 +513,21 @@ class RootClass(object):
         self.ObjTablesData["EDEfile_parm"]["next_EDE_file_version"] += 1
 
         AX_params_format = "%(Object Name)s;" + str(BACnet_Device_ID) + \
-            ";%(Object Name)s;%(BACnetObjTypeID)s;%(Object Identifier)s;%(Description)s;0;;;%(Settable)s;N;;;;%(Unit ID)s;"
+                           ";%(Object Name)s;%(BACnetObjTypeID)s;%(Object Identifier)s;%(Description)s;0;;;%(Settable)s;N;;;;%(Unit ID)s;"
 
         BX_params_format = "%(Object Name)s;" + str(BACnet_Device_ID) + \
-            ";%(Object Name)s;%(BACnetObjTypeID)s;%(Object Identifier)s;%(Description)s;0;0;1;%(Settable)s;N;;;;;"
+                           ";%(Object Name)s;%(BACnetObjTypeID)s;%(Object Identifier)s;%(Description)s;0;0;1;%(Settable)s;N;;;;;"
 
         MSX_params_format = "%(Object Name)s;" + str(BACnet_Device_ID) + \
-            ";%(Object Name)s;%(BACnetObjTypeID)s;%(Object Identifier)s;%(Description)s;1;1;%(Number of States)s;%(Settable)s;N;;;;;"
+                            ";%(Object Name)s;%(BACnetObjTypeID)s;%(Object Identifier)s;%(Description)s;1;1;%(Number of States)s;%(Settable)s;N;;;;;"
 
         Objects_List = []
-        for ObjType, params_format in [("AV",  AX_params_format),
-                                       ("AO",  AX_params_format),
-                                       ("AI",  AX_params_format),
-                                       ("BV",  BX_params_format),
-                                       ("BO",  BX_params_format),
-                                       ("BI",  BX_params_format),
+        for ObjType, params_format in [("AV", AX_params_format),
+                                       ("AO", AX_params_format),
+                                       ("AI", AX_params_format),
+                                       ("BV", BX_params_format),
+                                       ("BO", BX_params_format),
+                                       ("BI", BX_params_format),
                                        ("MSV", MSX_params_format),
                                        ("MSO", MSX_params_format),
                                        ("MSI", MSX_params_format)]:
@@ -536,10 +545,10 @@ class RootClass(object):
         template_file_name = os.path.join(
             template_file_dir, "template_EDE.csv")
         generate_file_content = open(template_file_name).read() % projdata_dict
-        generate_file_handle = open(generate_file_name, 'w')
-        generate_file_handle  .write(generate_file_content)
-        generate_file_handle  .write("\n".join(Objects_List))
-        generate_file_handle  .close()
+        generate_file_handle = open(generate_file_name, 'w', encoding='utf-8')
+        generate_file_handle.write(generate_file_content)
+        generate_file_handle.write("\n".join(Objects_List))
+        generate_file_handle.close()
 
         # templates of remaining files do not need changes. They are simply
         # copied unchanged!
@@ -548,12 +557,12 @@ class RootClass(object):
             template_file_name = os.path.join(
                 template_file_dir, "template" + extension)
             generate_file_content = open(template_file_name).read()
-            generate_file_handle = open(generate_file_name, 'w')
-            generate_file_handle  .write(generate_file_content)
-            generate_file_handle  .close()
+            generate_file_handle = open(generate_file_name, 'w', encoding='utf-8')
+            generate_file_handle.write(generate_file_content)
+            generate_file_handle.close()
 
     #
-    # Generate the source files #
+    # Generate the C source code files
     #
     def CTNGenerate_C(self, buildpath, locations):
         # Determine the current location in Beremiz's project configuration
@@ -571,7 +580,7 @@ class RootClass(object):
         if self.HasDuplicateObjectNames():
             self.GetCTRoot().logger.write_warning(
                 _("Error: BACnet server '{a1}.x:{a2}' contains objects with duplicate object names.\n").
-                format(a1=locstr, a2=self.CTNName()))
+                    format(a1=locstr, a2=self.CTNName()))
             raise Exception(False)
             # TODO: return an error code instead of raising an exception
             # (currently unsupported by Beremiz)
@@ -579,7 +588,7 @@ class RootClass(object):
         if self.HasDuplicateObjectIDs():
             self.GetCTRoot().logger.write_warning(
                 _("Error: BACnet server '{a1}.x: {a2}' contains objects with duplicate object identifiers.\n").
-                format(a1=locstr, a2=self.CTNName()))
+                    format(a1=locstr, a2=self.CTNName()))
             raise Exception(False)
             # TODO: return an error code instead of raising an exception
             # (currently unsupported by Beremiz)
@@ -596,6 +605,11 @@ class RootClass(object):
         # The BACnetServerNode attribute is added dynamically by ConfigTreeNode._AddParamsMembers()
         # It will be an XML parser object created by
         # GenerateParserFromXSDstring(self.XSD).CreateRoot()
+        #
+        # Note: Override_Parameters_Saved_on_PLC is converted to an integer by int()
+        #       The above flag is not currently in use. It requires further thinking on how the 
+        #       user will interpret and interact with this user interface...
+        # loc_dict["Override_Parameters_Saved_on_PLC"] = int(self.BACnetServerNode.getOverride_Parameters_Saved_on_PLC())
         loc_dict["network_interface"] = self.BACnetServerNode.getNetwork_Interface()
         loc_dict["port_number"] = self.BACnetServerNode.getUDP_Port_Number()
         loc_dict["BACnet_Device_ID"] = self.BACnetServerNode.getBACnet_Device_ID()
@@ -603,10 +617,12 @@ class RootClass(object):
         loc_dict["BACnet_Comm_Control_Password"] = self.BACnetServerNode.getBACnet_Communication_Control_Password()
         loc_dict["BACnet_Device_Location"] = self.BACnetServerNode.getBACnet_Device_Location()
         loc_dict["BACnet_Device_Description"] = self.BACnetServerNode.getBACnet_Device_Description()
-        loc_dict["BACnet_Device_AppSoft_Version"] = self.BACnetServerNode.getBACnet_Device_Application_Software_Version()
+        loc_dict[
+            "BACnet_Device_AppSoft_Version"] = self.BACnetServerNode.getBACnet_Device_Application_Software_Version()
         loc_dict["BACnet_Vendor_ID"] = BACNET_VENDOR_ID
         loc_dict["BACnet_Vendor_Name"] = BACNET_VENDOR_NAME
         loc_dict["BACnet_Model_Name"] = BACNET_DEVICE_MODEL_NAME
+        loc_dict["BACnet_Param_String_Size"] = BACNET_PARAM_STRING_SIZE
 
         # 2) Add the data specific to each BACnet object type
         # For each BACnet object type, start off by creating some intermediate helpful lists
@@ -625,16 +641,16 @@ class RootClass(object):
         # format for initializing a ANALOG_VALUE_DESCR struct in C code
         #    also valid for ANALOG_INPUT and ANALOG_OUTPUT
         AX_params_format = '{&___%(loc)s_%(Object Identifier)s, ' + \
-            '%(Object Identifier)s, "%(Object Name)s", "%(Description)s", %(Unit ID)d}'
+                           '%(Object Identifier)s, "%(Object Name)s", "%(Description)s", %(Unit ID)d}'
         # format for initializing a BINARY_VALUE_DESCR struct in C code
         #    also valid for BINARY_INPUT and BINARY_OUTPUT
         BX_params_format = '{&___%(loc)s_%(Object Identifier)s, ' + \
-            '%(Object Identifier)s, "%(Object Name)s", "%(Description)s"}'
+                           '%(Object Identifier)s, "%(Object Name)s", "%(Description)s"}'
 
         # format for initializing a MULTISTATE_VALUE_DESCR struct in C code
         #    also valid for MULTISTATE_INPUT and MULTISTATE_OUTPUT
         MSX_params_format = '{&___%(loc)s_%(Object Identifier)s, ' + \
-            '%(Object Identifier)s, "%(Object Name)s", "%(Description)s", %(Number of States)s}'
+                            '%(Object Identifier)s, "%(Object Name)s", "%(Description)s", %(Number of States)s}'
 
         # see the comment in GetVariableLocationTree()
         AV_locstr = 'MD' + locstr + '_2'
@@ -647,16 +663,16 @@ class RootClass(object):
         MSO_locstr = 'QB' + locstr + '_14'
         MSI_locstr = 'IB' + locstr + '_13'
 
-        for ObjType,  ObjLocStr,     params_format in [
-                ("AV",  AV_locstr,  AX_params_format),
-                ("AO",  AO_locstr,  AX_params_format),
-                ("AI",  AI_locstr,  AX_params_format),
-                ("BV",  BV_locstr,  BX_params_format),
-                ("BO",  BO_locstr,  BX_params_format),
-                ("BI",  BI_locstr,  BX_params_format),
-                ("MSV", MSV_locstr, MSX_params_format),
-                ("MSO", MSO_locstr, MSX_params_format),
-                ("MSI", MSI_locstr, MSX_params_format)]:
+        for ObjType, ObjLocStr, params_format in [
+            ("AV", AV_locstr, AX_params_format),
+            ("AO", AO_locstr, AX_params_format),
+            ("AI", AI_locstr, AX_params_format),
+            ("BV", BV_locstr, BX_params_format),
+            ("BO", BO_locstr, BX_params_format),
+            ("BI", BI_locstr, BX_params_format),
+            ("MSV", MSV_locstr, MSX_params_format),
+            ("MSO", MSO_locstr, MSX_params_format),
+            ("MSI", MSI_locstr, MSX_params_format)]:
             parameters_list = []
             locatedvar_list = []
             self.ObjTables[ObjType + "_Obj"].UpdateAllVirtualProperties()
@@ -697,7 +713,7 @@ class RootClass(object):
             template_file_name = os.path.join(
                 template_file_dir, "%s.%s" % (file_name, extension))
             generate_file_content = open(template_file_name).read() % loc_dict
-            generate_file_handle = open(generate_file_name, 'w')
+            generate_file_handle = open(generate_file_name, 'w', encoding='utf-8')
             generate_file_handle.write(generate_file_content)
             generate_file_handle.close()
 
@@ -726,4 +742,48 @@ class RootClass(object):
         CFLAGS = ' -I"' + BacnetIncludePath + '"'
         CFLAGS += ' -I"' + BacnetIncludePortPath + '"'
 
-        return [(Generated_BACnet_c_mainfile_name, CFLAGS)], LDFLAGS, True
+        # ----------------------------------------------------------------------
+        # Create a file containing the default configuration paramters.
+        # Beremiz will then transfer this file to the PLC, where the web server 
+        # will read it to obtain the default configuration parameters.
+        # ----------------------------------------------------------------------
+        # NOTE: This is no loner needed! The web interface will read these 
+        # parameters directly from the compiled C code (.so file)
+        #
+        ### extra_file_name   = os.path.join(buildpath, "%s_%s.%s" % ('bacnet_extrafile', postfix, 'txt'))
+        ### extra_file_handle = open(extra_file_name, 'w')
+        ### 
+        ### proplist = ["network_interface", "port_number", "BACnet_Device_ID", "BACnet_Device_Name", 
+        ###             "BACnet_Comm_Control_Password", "BACnet_Device_Location", 
+        ###             "BACnet_Device_Description", "BACnet_Device_AppSoft_Version"]
+        ### for propname in proplist:
+        ###     extra_file_handle.write("%s:%s\n" % (propname, loc_dict[propname]))
+        ### 
+        ### extra_file_handle.close()
+        ### extra_file_handle = open(extra_file_name, 'r')
+
+        # Format of data to return:
+        #   [(Cfiles, CFLAGS), ...], LDFLAGS, DoCalls, extra_files
+        # LDFLAGS     = ['flag1', 'flag2', ...]
+        # DoCalls     = true  or  false
+        # extra_files = (fname,fobject), ...
+        # fobject     = file object, already open'ed for read() !!
+        #
+        # extra_files -> files that will be downloaded to the PLC!
+
+        websettingfile = open(paths.AbsNeighbourFile(__file__, "web_settings.py"), 'r')
+        websettingcode = websettingfile.read()
+        websettingfile.close()
+
+        location_str = "_".join(map(str, self.GetCurrentLocation()))
+        websettingcode = websettingcode % locals()
+
+        runtimefile_path = os.path.join(buildpath, "runtime_bacnet_websettings.py")
+        runtimefile = open(runtimefile_path, 'w')
+        runtimefile.write(websettingcode)
+        runtimefile.close()
+
+        return ([(Generated_BACnet_c_mainfile_name, CFLAGS)], LDFLAGS, True,['bacnet'],
+                ("runtime_bacnet_websettings_%s.py" % location_str, open(runtimefile_path, "r",encoding='utf-8')),
+                )
+        # return [(Generated_BACnet_c_mainfile_name, CFLAGS)], LDFLAGS, True, ('extrafile1.txt', extra_file_handle)

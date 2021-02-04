@@ -1,6 +1,5 @@
 # pylint: disable=undefined-variable
 
-from __future__ import absolute_import
 from svgui.pyjs.jsonrpc.jsonrpc import JSONRPCServiceBase
 
 

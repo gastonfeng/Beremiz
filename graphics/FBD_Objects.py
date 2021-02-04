@@ -23,18 +23,14 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
-from __future__ import division
-import wx
-from six.moves import xrange
 
 from graphics.GraphicCommons import *
-from plcopen.structures import *
-
-
 # -------------------------------------------------------------------------------
 #                         Function Block Diagram Block
 # -------------------------------------------------------------------------------
+
+
+# from six.moves import range
 
 
 def TestConnectorName(name, block_type):
@@ -62,6 +58,11 @@ class FBD_Block(Graphic_Element):
         self.Pen = MiterPen(wx.BLACK)
         self.SetType(type, extension, inputs, connectors, executionControl)
         self.Highlights = {}
+        self.var = None
+        if hasattr(self.Parent, 'VariableEditor'):
+            for var in self.Parent.VariableEditor.Values:
+                if var.Name == name:
+                    self.var = var
 
     # Make a clone of this FBD_Block
     def Clone(self, parent, id=None, name="", pos=None):
@@ -78,7 +79,7 @@ class FBD_Block(Graphic_Element):
         return block
 
     def GetConnectorTranslation(self, element):
-        return dict(zip(self.Inputs + self.Outputs, element.Inputs + element.Outputs))
+        return dict(list(zip(self.Inputs + self.Outputs, element.Inputs + element.Outputs)))
 
     def Flush(self):
         for input in self.Inputs:
@@ -122,10 +123,10 @@ class FBD_Block(Graphic_Element):
     # Returns if the point given is in the bounding box
     def HitTest(self, pt, connectors=True):
         if self.Name != "":
-            test_text = self.GetTextBoundingBox().InsideXY(pt.x, pt.y)
+            test_text = self.GetTextBoundingBox().Contains(pt.x, pt.y)
         else:
             test_text = False
-        test_block = self.GetBlockBoundingBox(connectors).InsideXY(pt.x, pt.y)
+        test_block = self.GetBlockBoundingBox(connectors).Contains(pt.x, pt.y)
         return test_text or test_block
 
     # Returns the bounding box of the name outside the block
@@ -165,7 +166,7 @@ class FBD_Block(Graphic_Element):
             linesize = max((self.Size[1] - BLOCK_LINE_SIZE) // lines, BLOCK_LINE_SIZE)
             # Update inputs and outputs positions
             position = BLOCK_LINE_SIZE + linesize // 2
-            for i in xrange(lines):
+            for i in range(lines):
                 if scaling is not None:
                     ypos = round_scaling(self.Pos.y + position, scaling[1]) - self.Pos.y
                 else:
@@ -256,7 +257,7 @@ class FBD_Block(Graphic_Element):
                 outputs = [output for output in blocktype["outputs"]]
                 if blocktype["extensible"]:
                     start = int(inputs[-1][0].replace("IN", ""))
-                    for dummy in xrange(self.Extension - len(blocktype["inputs"])):
+                    for dummy in range(self.Extension - len(blocktype["inputs"])):
                         start += 1
                         inputs.append(("IN%d" % start, inputs[-1][1], inputs[-1][2]))
                 comment = blocktype["comment"]
@@ -392,7 +393,7 @@ class FBD_Block(Graphic_Element):
 #            pos = event.GetLogicalPosition(dc)
 #            for input in self.Inputs:
 #                rect = input.GetRedrawRect()
-#                if rect.InsideXY(pos.x, pos.y):
+    #                if rect.Contains(pos.x, pos.y):
 #                    print "Find input"
 #                    tip = wx.TipWindow(self.Parent, "Test")
 #                    tip.SetBoundingRect(rect)
@@ -495,6 +496,11 @@ class FBD_Block(Graphic_Element):
             # Draw block execution order
             dc.DrawText(str(self.ExecutionOrder), self.Pos.x + self.Size[0] - executionorder_size[0],
                         self.Pos.y + self.Size[1] + 2)
+        if self.var and self.var.Documentation and self.Parent.showComment:
+            name_pos = (
+                self.Pos.x + (self.Size[0] - name_size[0]) // 2 + name_size[0] + 10, self.Pos.y - (name_size[1] + 2))
+            dc.SetTextForeground(wx.Colour(0, 0, 255))
+            dc.DrawText(self.var.Documentation, name_pos[0], name_pos[1])
 
         if not getattr(dc, "printing", False):
             DrawHighlightedText(dc, self.Name, self.Highlights.get("name", []), name_pos[0], name_pos[1])
@@ -517,12 +523,22 @@ class FBD_Variable(Graphic_Element):
         self.Type = None
         self.ValueType = None
         self.Id = id
+        self.var = None
+        if hasattr(self.Parent, 'VariableEditor'):
+            for var in self.Parent.VariableEditor.Values:
+                if var.Name == name:
+                    self.var = var
         self.SetName(name)
         self.SetExecutionOrder(executionOrder)
         self.Input = None
         self.Output = None
         self.SetType(type, value_type)
         self.Highlights = []
+
+    def GetToolTipValue(self):
+        if self.var:
+            return '%s,%s,%s' % (self.var.Type, self.var.Location, self.var.Documentation)
+        return None
 
     # Make a clone of this FBD_Variable
     def Clone(self, parent, id=None, pos=None):
@@ -564,6 +580,7 @@ class FBD_Variable(Graphic_Element):
                 rect = rect.Union(self.Output.GetConnectedRedrawRect(movex, movey))
         return rect
 
+
     # Unconnect connector
     def Clean(self):
         if self.Input:
@@ -577,7 +594,7 @@ class FBD_Variable(Graphic_Element):
 
     # Refresh the size of text for name
     def RefreshNameSize(self):
-        self.NameSize = self.Parent.GetTextExtent(self.Name)
+        self.NameSize = self.Parent.GetTextExtent(self.Name or 'Unknown')
 
     # Refresh the size of text for execution order
     def RefreshExecutionOrderSize(self):
@@ -688,6 +705,7 @@ class FBD_Variable(Graphic_Element):
                 self.Input.SetType(value_type)
             if self.Output:
                 self.Output.SetType(value_type)
+        self.Description = "Description"
 
     # Returns the variable type
     def GetType(self):
@@ -782,9 +800,14 @@ class FBD_Variable(Graphic_Element):
         text_pos = (self.Pos.x + (self.Size[0] - name_size[0]) // 2,
                     self.Pos.y + (self.Size[1] - name_size[1]) // 2)
         # Draw a rectangle with the variable size
-        dc.DrawRectangle(self.Pos.x, self.Pos.y, self.Size[0] + 1, self.Size[1] + 1)
+        dc.DrawRectangle(self.Pos.x, self.Pos.y, self.Size[0], self.Size[1])
         # Draw variable name
         dc.DrawText(self.Name, text_pos[0], text_pos[1])
+        if self.var and self.var.Documentation and self.Parent.showComment:
+            name_pos = (self.Pos.x + (self.Size[0] - name_size[0]) // 2 + name_size[0] + 10,
+                        self.Pos.y + (self.Size[1] - name_size[1]) // 2)
+            dc.SetTextForeground(wx.Colour(0, 0, 255))
+            dc.DrawText(self.var.Documentation, name_pos[0], name_pos[1])
         # Draw connectors
         if self.Input:
             self.Input.Draw(dc)

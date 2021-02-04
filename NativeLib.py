@@ -24,9 +24,10 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
+# from __future__ import absolute_import
 import util.paths as paths
-from POULibrary import SimplePOULibraryFactory
+from POULibrary import POULibrary
 
-NativeLibrary = SimplePOULibraryFactory(
-    paths.AbsNeighbourFile(__file__, "NativeLib.xml"))
+class NativeLibrary(POULibrary):
+    def GetLibraryPath(self):
+        return paths.AbsNeighbourFile(__file__, "NativeLib.xml")

@@ -23,20 +23,20 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
 import wx
+import wx.grid
 
-from dialogs.BrowseLocationsDialog import BrowseLocationsDialog
+from dialogs import BrowseLocationsDialog
 
 
-class LocationCellControl(wx.PyControl):
-
+class LocationCellControl(wx.Control):
     '''
     Custom cell editor control with a text box and a button that launches
     the BrowseLocationsDialog.
     '''
+
     def __init__(self, parent):
-        wx.PyControl.__init__(self, parent)
+        wx.Control.__init__(self, parent)
 
         main_sizer = wx.FlexGridSizer(cols=2, hgap=0, rows=1, vgap=0)
         main_sizer.AddGrowableCol(0)
@@ -46,12 +46,12 @@ class LocationCellControl(wx.PyControl):
         self.Location = wx.TextCtrl(self, size=wx.Size(0, -1),
                                     style=wx.TE_PROCESS_ENTER)
         self.Location.Bind(wx.EVT_KEY_DOWN, self.OnLocationChar)
-        main_sizer.AddWindow(self.Location, flag=wx.GROW)
+        main_sizer.Add(self.Location, flag=wx.GROW)
 
         # create browse button
         self.BrowseButton = wx.Button(self, label='...', size=wx.Size(30, -1))
         self.BrowseButton.Bind(wx.EVT_BUTTON, self.OnBrowseButtonClick)
-        main_sizer.AddWindow(self.BrowseButton, flag=wx.GROW)
+        main_sizer.Add(self.BrowseButton, flag=wx.GROW)
 
         self.Bind(wx.EVT_SIZE, self.OnSize)
 
@@ -61,9 +61,17 @@ class LocationCellControl(wx.PyControl):
         self.VarType = None
         self.Default = False
         self.VariableName = None
+        self.Desc = None
+        self.do_rename = False
+        self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self.onEVT_MOUSE_CAPTURE_LOST)
 
-    def __del__(self):
-        self.Controller = None
+    def onEVT_MOUSE_CAPTURE_LOST(self, event):
+        if self.HasCapture():
+            self.ReleaseMouse()
+        event.Skip()
+
+    # def __del__(self):
+    #     self.Controller = None
 
     def SetController(self, controller):
         self.Controller = controller
@@ -126,6 +134,8 @@ class LocationCellControl(wx.PyControl):
             self.Location.SetValue(location)
             self.VariableName = infos["var_name"]
             self.VarType = infos["IEC_type"]
+            self.Desc = infos['description']
+            self.do_rename = infos['do_rename']
 
             # when user selected something, end editing immediately
             # so that changes over multiple colums appear
@@ -150,12 +160,13 @@ class LocationCellControl(wx.PyControl):
         self.Location.SetFocus()
 
 
-class LocationCellEditor(wx.grid.PyGridCellEditor):
+class LocationCellEditor(wx.grid.GridCellEditor):
     '''
     Grid cell editor that uses LocationCellControl to display a browse button.
     '''
+
     def __init__(self, table, controller):
-        wx.grid.PyGridCellEditor.__init__(self)
+        wx.grid.GridCellEditor.__init__(self)
 
         self.Table = table
         self.Controller = controller
@@ -167,8 +178,8 @@ class LocationCellEditor(wx.grid.PyGridCellEditor):
     def Create(self, parent, id, evt_handler):
         self.CellControl = LocationCellControl(parent)
         self.SetControl(self.CellControl)
-        if evt_handler:
-            self.CellControl.PushEventHandler(evt_handler)
+        # if evt_handler:
+        #     self.CellControl.PushEventHandler(evt_handler)
 
     def BeginEdit(self, row, col, grid):
         self.CellControl.Enable()
@@ -178,10 +189,18 @@ class LocationCellEditor(wx.grid.PyGridCellEditor):
             self.CellControl.SetVarType(self.Table.GetValueByName(row, 'Type'))
         self.CellControl.SetFocus()
 
-    def EndEditInternal(self, row, col, grid, old_loc):
+    def EndEdit(self, row, col, grid, oldval):
         loc = self.CellControl.GetValue()
-        changed = loc != old_loc
-        if changed:
+        changed = None
+        if loc != oldval:
+            changed = True
+        self.CellControl.Disable()
+        return changed
+
+    def ApplyEdit(self, row, col, grid):
+        loc = self.CellControl.GetValue()
+        self.Table.SetValueByName(row, 'Location', loc)
+        if self.CellControl.do_rename:
             name = self.CellControl.GetName()
             if name is not None:
                 message = self.Table.Parent.CheckVariableName(name, row)
@@ -191,28 +210,16 @@ class LocationCellEditor(wx.grid.PyGridCellEditor):
                 old_name = self.Table.GetValueByName(row, 'Name')
                 self.Table.SetValueByName(row, 'Name', name)
                 self.Table.Parent.OnVariableNameChange(old_name, name)
-            self.Table.SetValueByName(row, 'Location', loc)
             var_type = self.CellControl.GetVarType()
             if var_type is not None:
                 self.Table.SetValueByName(row, 'Type', var_type)
-        else:
-            wx.CallAfter(self.Table.Parent.ShowErrorMessage,
-                         _("Selected location is identical to previous one"))
-        self.CellControl.Disable()
-        return changed
-
-    if wx.VERSION >= (3, 0, 0):
-        def EndEdit(self, row, col, grid, oldval):
-            return self.EndEditInternal(row, col, grid, oldval)
-    else:
-        def EndEdit(self, row, col, grid):
-            old_loc = self.Table.GetValueByName(row, 'Location')
-            return self.EndEditInternal(row, col, grid, old_loc)
+            if self.CellControl.Desc:
+                self.Table.SetValueByName(row, 'Documentation', self.CellControl.Desc)
 
     def SetSize(self, rect):
-        self.CellControl.SetDimensions(rect.x + 1, rect.y,
-                                       rect.width, rect.height,
-                                       wx.SIZE_ALLOW_MINUS_ONE)
+        self.CellControl.SetSize(rect.x + 1, rect.y,
+                                 rect.width, rect.height,
+                                 wx.SIZE_ALLOW_MINUS_ONE)
 
     def Clone(self):
         return LocationCellEditor(self.Table, self.Controller)

@@ -23,9 +23,11 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
+# from __future__ import absolute_import
 import wx
+
 from plcopen.structures import TestIdentifier, IEC_KEYWORDS
+
 
 # -------------------------------------------------------------------------------
 #                                POU Name Dialog
@@ -57,7 +59,7 @@ class PouNameDialog(wx.TextEntryDialog):
         if message is not None:
             dialog = wx.MessageDialog(self, message, _("Error"), wx.OK | wx.ICON_ERROR)
             dialog.ShowModal()
-            dialog.Destroy()
+            # dialog.Destroy()
         else:
             self.EndModal(wx.ID_OK)
         event.Skip()

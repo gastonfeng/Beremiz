@@ -23,41 +23,44 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-from __future__ import absolute_import
-from __future__ import division
-import os
-import sys
-import shutil
-import wx
-from gnosis.xml.pickle import *  # pylint: disable=import-error
-from gnosis.xml.pickle.util import setParanoia  # pylint: disable=import-error
 
+import os
+import shutil
+import sys
+
+import wx
+# from gnosis.xml.pickle import *  # pylint: disable=import-error
+# from gnosis.xml.pickle.util import setParanoia  # pylint: disable=import-error
+from xml_marshaller.xml_marshaller import dump
+
+import canfestival_config
 import util.paths as paths
-from util.TranslationCatalogs import AddCatalog
-from ConfigTreeNode import ConfigTreeNode
-from PLCControler import \
-    LOCATION_CONFNODE, \
-    LOCATION_VAR_MEMORY
 
 base_folder = paths.AbsParentDir(__file__, 2)  # noqa
 CanFestivalPath = os.path.join(base_folder, "CanFestival-3")  # noqa
 sys.path.append(os.path.join(CanFestivalPath, "objdictgen"))  # noqa
+from ConfigTreeNode import ConfigTreeNode
+from plcopen.types_enums import \
+    LOCATION_CONFNODE, \
+    LOCATION_VAR_MEMORY
+from canfestival import config_utils
+from util.TranslationCatalogs import AddCatalog
 
 # pylint: disable=wrong-import-position
 from nodelist import NodeList
 from nodemanager import NodeManager
 import gen_cfile
 import eds_utils
-import canfestival_config as local_canfestival_config  # pylint: disable=import-error
 from commondialogs import CreateNodeDialog
 from subindextable import IECTypeConversion, SizeConversion
-from canfestival import config_utils
-from canfestival.SlaveEditor import SlaveEditor, MasterViewer
-from canfestival.NetworkEditor import NetworkEditor
+from .SlaveEditor import SlaveEditor, MasterViewer
+from .NetworkEditor import NetworkEditor
 
 
 AddCatalog(os.path.join(CanFestivalPath, "objdictgen", "locale"))
-setParanoia(0)
+
+
+# setParanoia(0)
 
 
 # --------------------------------------------------
@@ -86,13 +89,14 @@ def GetSlaveLocationTree(slave_node, current_location, name):
             "location": ".".join([str(i) for i in current_location]) + ".x",
             "children": entries}
 
+
 # --------------------------------------------------
 #                    SLAVE
 # --------------------------------------------------
 
 
 class _SlaveCTN(NodeManager):
-    XSD = """<?xml version="1.0" encoding="ISO-8859-1" ?>
+    XSD = """<?xml version="1.0" encoding="utf-8" ?>
     <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
       <xsd:element name="CanFestivalSlaveNode">
         <xsd:complexType>
@@ -132,23 +136,23 @@ class _SlaveCTN(NodeManager):
                 profile, filepath = dialog.GetProfile()
                 NMT = dialog.GetNMTManagement()
                 options = dialog.GetOptions()
-                self.CreateNewNode(name,         # Name - will be changed at build time
-                                   id,           # NodeID - will be changed at build time
-                                   "slave",      # Type
+                self.CreateNewNode(name,  # Name - will be changed at build time
+                                   id,  # NodeID - will be changed at build time
+                                   "slave",  # Type
                                    description,  # description
-                                   profile,      # profile
-                                   filepath,     # prfile filepath
-                                   NMT,          # NMT
-                                   options)      # options
+                                   profile,  # profile
+                                   filepath,  # prfile filepath
+                                   NMT,  # NMT
+                                   options)  # options
             else:
                 self.CreateNewNode("SlaveNode",  # Name - will be changed at build time
-                                   0x00,         # NodeID - will be changed at build time
-                                   "slave",      # Type
-                                   "",           # description
-                                   "None",       # profile
-                                   "",           # prfile filepath
+                                   0x00,  # NodeID - will be changed at build time
+                                   "slave",  # Type
+                                   "",  # description
+                                   "None",  # profile
+                                   "",  # prfile filepath
                                    "heartbeat",  # NMT
-                                   [])           # options
+                                   [])  # options
             dialog.Destroy()
             self.OnCTNSave()
 
@@ -173,7 +177,7 @@ class _SlaveCTN(NodeManager):
                                os.path.expanduser("~"),
                                "%s.eds" % self.CTNName(),
                                _("EDS files (*.eds)|*.eds|All files|*.*"),
-                               wx.SAVE | wx.OVERWRITE_PROMPT)
+                               wx.FD_SAVE | wx.FD_OVERWRITE_PROMPT)
         if dialog.ShowModal() == wx.ID_OK:
             result = eds_utils.GenerateEDSFile(dialog.GetPath(), self.GetCurrentNodeCopy())
             if result:
@@ -182,10 +186,10 @@ class _SlaveCTN(NodeManager):
 
     ConfNodeMethods = [
         {
-            "bitmap":    "ExportSlave",
-            "name":    _("Export slave"),
+            "bitmap": "ExportSlave",
+            "name": _("Export slave"),
             "tooltip": _("Export CanOpen slave to EDS file"),
-            "method":   "_ExportSlave"
+            "method": "_ExportSlave"
         },
     ]
 
@@ -237,7 +241,7 @@ class _SlaveCTN(NodeManager):
         res = eds_utils.GenerateEDSFile(os.path.join(buildpath, "Slave_%s.eds" % prefix), slave)
         if res:
             raise Exception(res)
-        return [(Gen_OD_path, local_canfestival_config.getCFLAGS(CanFestivalPath))], "", False
+        return [(Gen_OD_path, canfestival_config.getCFLAGS(CanFestivalPath))], "", False, []
 
     def LoadPrevious(self):
         self.LoadCurrentPrevious()
@@ -247,6 +251,7 @@ class _SlaveCTN(NodeManager):
 
     def GetBufferState(self):
         return self.GetCurrentBufferState()
+
 
 # --------------------------------------------------
 #                    MASTER
@@ -298,7 +303,7 @@ class _NodeManager(NodeManager):
 
 
 class _NodeListCTN(NodeList):
-    XSD = """<?xml version="1.0" encoding="ISO-8859-1" ?>
+    XSD = """<?xml version="1.0" encoding="utf-8" ?>
     <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
       <xsd:element name="CanFestivalNode">
         <xsd:complexType>
@@ -352,7 +357,7 @@ class _NodeListCTN(NodeList):
 
     def GetVariableLocationTree(self):
         current_location = self.GetCurrentLocation()
-        nodeindexes = self.SlaveNodes.keys()
+        nodeindexes = list(self.SlaveNodes.keys())
         nodeindexes.sort()
         children = []
         children += [GetSlaveLocationTree(self.Manager.GetCurrentNodeCopy(),
@@ -363,8 +368,8 @@ class _NodeListCTN(NodeList):
                                           self.SlaveNodes[nodeid]["Name"]) for nodeid in nodeindexes]
 
         return {
-            "name":     self.BaseParams.getName(),
-            "type":     LOCATION_CONFNODE,
+            "name": self.BaseParams.getName(),
+            "type": LOCATION_CONFNODE,
             "location": self.GetFullIEC_Channel(),
             "children": children
         }
@@ -390,7 +395,8 @@ class _NodeListCTN(NodeList):
                     return
 
                 manager = MiniNodeManager(self, masterpath, self.CTNFullName())
-                self._GeneratedMasterView = MasterViewer(app_frame.TabsOpened, manager, app_frame, name)
+                win = wx.MDIChildFrame(app_frame, -1, name)
+                self._GeneratedMasterView = MasterViewer(win, manager, app_frame, name)
 
             if self._GeneratedMasterView is not None:
                 app_frame.EditProjectElement(self._GeneratedMasterView, self._GeneratedMasterView.GetInstancePath())
@@ -404,10 +410,10 @@ class _NodeListCTN(NodeList):
 
     ConfNodeMethods = [
         {
-            "bitmap":    "ShowMaster",
-            "name":    _("Show Master"),
+            "bitmap": "ShowMaster",
+            "name": _("Show Master"),
             "tooltip": _("Show Master generated by config_utils"),
-            "method":   "_ShowGeneratedMaster"
+            "method": "_ShowGeneratedMaster"
         }
     ]
 
@@ -451,7 +457,8 @@ class _NodeListCTN(NodeList):
         Gen_OD_path = os.path.join(buildpath, "OD_%s.c" % prefix)
         # Create a new copy of the model with DCF loaded with PDO mappings for desired location
         try:
-            master, pointers = config_utils.GenerateConciseDCF(locations, current_location, self, self.CanFestivalNode.getSync_TPDOs(), "OD_%s" % prefix)
+            master, pointers = config_utils.GenerateConciseDCF(locations, current_location, self,
+                                                               self.CanFestivalNode.getSync_TPDOs(), "OD_%s" % prefix)
         except config_utils.PDOmappingException as e:
             raise Exception(e.message)
         # Do generate C file.
@@ -459,13 +466,13 @@ class _NodeListCTN(NodeList):
         if res:
             raise Exception(res)
 
-        file = open(os.path.join(buildpath, "MasterGenerated.od"), "w")
+        file = open(os.path.join(buildpath, "MasterGenerated.od"), "wb")
         # linter disabled here, undefined variable happens
         # here because gnosis isn't impored while linting
         dump(master, file)  # pylint: disable=undefined-variable
         file.close()
 
-        return [(Gen_OD_path, local_canfestival_config.getCFLAGS(CanFestivalPath))], "", False
+        return [(Gen_OD_path, canfestival_config.getCFLAGS(CanFestivalPath))], "", False, ['CanFestival-3']
 
     def LoadPrevious(self):
         self.Manager.LoadCurrentPrevious()
@@ -478,7 +485,7 @@ class _NodeListCTN(NodeList):
 
 
 class RootClass(object):
-    XSD = """<?xml version="1.0" encoding="ISO-8859-1" ?>
+    XSD = """<?xml version="1.0" encoding="utf-8" ?>
     <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
       <xsd:element name="CanFestivalInstance">
         <xsd:complexType>
@@ -488,8 +495,8 @@ class RootClass(object):
     </xsd:schema>
     """
 
-    CTNChildrenTypes = [("CanOpenNode",  _NodeListCTN, "CanOpen Master"),
-                        ("CanOpenSlave", _SlaveCTN,    "CanOpen Slave")]
+    CTNChildrenTypes = [("CanOpenNode", _NodeListCTN, "CanOpen Master"),
+                        ("CanOpenSlave", _SlaveCTN, "CanOpen Slave")]
 
     def GetParamsAttributes(self, path=None):
         infos = ConfigTreeNode.GetParamsAttributes(self, path=path)
@@ -497,7 +504,7 @@ class RootClass(object):
             if element["name"] == "CanFestivalInstance":
                 for child in element["children"]:
                     if child["name"] == "CAN_Driver":
-                        child["type"] = local_canfestival_config.DLL_LIST
+                        child["type"] = canfestival_config.DLL_LIST
         return infos
 
     def GetCanDriver(self):
@@ -509,7 +516,7 @@ class RootClass(object):
     def CTNGenerate_C(self, buildpath, locations):
         can_driver = self.GetCanDriver()
         if can_driver is not None:
-            can_drivers = local_canfestival_config.DLL_LIST
+            can_drivers = canfestival_config.DLL_LIST
             if can_driver not in can_drivers:
                 can_driver = can_drivers[0]
             can_drv_ext = self.GetCTRoot().GetBuilder().extension
@@ -558,38 +565,39 @@ class RootClass(object):
                 if len(SlaveIDs) == 0:
                     # define post_SlaveBootup lookup functions
                     format_dict["slavebootups"] += (
-                        "static void %s_post_SlaveBootup(CO_Data* d, UNS8 nodeId){}\n" % (nodename))
+                            "static void %s_post_SlaveBootup(CO_Data* d, UNS8 nodeId){}\n" % (nodename))
                 else:
                     format_dict["slavebootups"] += (
-                        "static void %s_post_SlaveBootup(CO_Data* d, UNS8 nodeId){\n" % (nodename) +
-                        "    check_and_start_node(d, nodeId);\n" +
-                        "}\n")
+                            "static void %s_post_SlaveBootup(CO_Data* d, UNS8 nodeId){\n" % (nodename) +
+                            "    check_and_start_node(d, nodeId);\n" +
+                            "}\n")
                 # register previously declared func as post_SlaveBootup callback for that node
                 format_dict["slavebootup_register"] += (
-                    "%s_Data.post_SlaveBootup = %s_post_SlaveBootup;\n" % (nodename, nodename))
+                        "%s_Data.post_SlaveBootup = %s_post_SlaveBootup;\n" % (nodename, nodename))
                 format_dict["pre_op"] += (
-                    "static void %s_preOperational(CO_Data* d){\n    " % (nodename) +
-                    "".join(["    masterSendNMTstateChange(d, %d, NMT_Reset_Comunication);\n" % NdId for NdId in SlaveIDs]) +
-                    "}\n")
+                        "static void %s_preOperational(CO_Data* d){\n    " % (nodename) +
+                        "".join(["    masterSendNMTstateChange(d, %d, NMT_Reset_Comunication);\n" % NdId for NdId in
+                                 SlaveIDs]) +
+                        "}\n")
                 format_dict["pre_op_register"] += (
-                    "%s_Data.preOperational = %s_preOperational;\n" % (nodename, nodename))
+                        "%s_Data.preOperational = %s_preOperational;\n" % (nodename, nodename))
             else:
                 # Slave node
                 align = child_data.getSync_Align()
                 align_ratio = child_data.getSync_Align_Ratio()
                 if align > 0:
                     format_dict["post_sync"] += (
-                        "static int %s_CalCount = 0;\n" % (nodename) +
-                        "static void %s_post_sync(CO_Data* d){\n" % (nodename) +
-                        "    if(%s_CalCount < %d){\n" % (nodename, align) +
-                        "        %s_CalCount++;\n" % (nodename) +
-                        "        align_tick(-1);\n" +
-                        "    }else{\n" +
-                        "        align_tick(%d);\n" % (align_ratio) +
-                        "    }\n" +
-                        "}\n")
+                            "static int %s_CalCount = 0;\n" % (nodename) +
+                            "static void %s_post_sync(CO_Data* d){\n" % (nodename) +
+                            "    if(%s_CalCount < %d){\n" % (nodename, align) +
+                            "        %s_CalCount++;\n" % (nodename) +
+                            "        align_tick(-1);\n" +
+                            "    }else{\n" +
+                            "        align_tick(%d);\n" % (align_ratio) +
+                            "    }\n" +
+                            "}\n")
                     format_dict["post_sync_register"] += (
-                        "%s_Data.post_sync = %s_post_sync;\n" % (nodename, nodename))
+                            "%s_Data.post_sync = %s_post_sync;\n" % (nodename, nodename))
                 format_dict["nodes_init"] += 'NODE_SLAVE_INIT(%s, %s)\n    ' % (
                     nodename,
                     child_data.getNodeId())
@@ -608,11 +616,13 @@ class RootClass(object):
         filename = paths.AbsNeighbourFile(__file__, "cf_runtime.c")
         cf_main = open(filename).read() % format_dict
         cf_main_path = os.path.join(buildpath, "CF_%(locstr)s.c" % format_dict)
-        f = open(cf_main_path, 'w')
+        f = open(cf_main_path, 'w', encoding='utf-8')
         f.write(cf_main)
         f.close()
 
-        res = [(cf_main_path, local_canfestival_config.getCFLAGS(CanFestivalPath))], local_canfestival_config.getLDFLAGS(CanFestivalPath), True
+        res = [(
+            cf_main_path, canfestival_config.getCFLAGS(CanFestivalPath))], canfestival_config.getLDFLAGS(
+            CanFestivalPath), True, []
 
         if can_driver is not None:
             can_driver_path = os.path.join(CanFestivalPath, "drivers", can_driver, can_driver_name)

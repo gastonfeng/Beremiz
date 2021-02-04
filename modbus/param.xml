@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+    <xsd:element name="ParamArea">
+        <xsd:complexType>
+            <xsd:attribute name="ID" use="optional" default="1">
+                <xsd:simpleType>
+                    <xsd:restriction base="xsd:integer">
+                        <xsd:minInclusive value="0"/>
+                        <xsd:maxInclusive value="255"/>
+                    </xsd:restriction>
+                </xsd:simpleType>
+            </xsd:attribute>
+            <xsd:attribute name="baudrate" type="xsd:integer" use="optional" default="9600"/>
+            <xsd:attribute name="data_bits" use="optional" default="8">
+                <xsd:simpleType>
+                    <xsd:restriction base="xsd:integer">
+                        <xsd:minInclusive value="8"/>
+                        <xsd:maxInclusive value="10"/>
+                    </xsd:restriction>
+                </xsd:simpleType>
+            </xsd:attribute>
+            <xsd:attribute name="stop_bits" use="optional" default="1">
+                <xsd:simpleType>
+                    <xsd:restriction base="xsd:integer">
+                        <xsd:minInclusive value="1"/>
+                        <xsd:maxInclusive value="2"/>
+                    </xsd:restriction>
+                </xsd:simpleType>
+            </xsd:attribute>
+            <xsd:attribute name="Parity" type="xsd:integer" use="optional" default="1"/>
+            <xsd:attribute name="Period" type="xsd:integer" use="optional" default="1"/>
+            <xsd:attribute name="Enable" type="xsd:boolean" use="optional" default="1"/>
+        </xsd:complexType>
+    </xsd:element>
+</xsd:schema>

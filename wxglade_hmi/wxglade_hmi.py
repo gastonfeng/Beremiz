@@ -24,13 +24,12 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
 import os
-import sys
 import shutil
-from xml.dom import minidom
+import sys
 
 import wx
+from xml.dom import minidom
 
 import util.paths as paths
 from py_ext import PythonFileCTNMixin
@@ -67,8 +66,10 @@ class WxGladeHMI(PythonFileCTNMixin):
             return path
         except ImportError:
             pass
-
-        defLibDir = "/usr/share/wxglade"
+        if wx.Platform == '__WXMSW__':
+            defLibDir=os.path.join(os.path.dirname(__file__),'..','..','wxGlade-0.9.5')
+        else:
+            defLibDir = "/usr/share/wxglade"
         if os.path.isdir(defLibDir):
             path = defLibDir
 
@@ -76,6 +77,8 @@ class WxGladeHMI(PythonFileCTNMixin):
 
     def launch_wxglade(self, options, wait=False):
         path = self.GetWxGladePath()
+        if not path:
+            raise Exception("Need wxglade Package!")
         glade = os.path.join(path, 'wxglade.py')
         if wx.Platform == '__WXMSW__':
             glade = "\"%s\"" % glade
@@ -126,7 +129,7 @@ class WxGladeHMI(PythonFileCTNMixin):
                 ['-o', wxghmipyfile_path, '-g', 'python', wxgfile_path], wait=True)
 
             hmipyfile = open(hmipyfile_path, 'r')
-            define_hmi = hmipyfile.read().decode('utf-8')
+            define_hmi = hmipyfile.read()
             hmipyfile.close()
 
         else:

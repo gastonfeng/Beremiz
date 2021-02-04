@@ -1,6 +1,7 @@
-from __future__ import absolute_import
+# from __future__ import absolute_import
 
 import wx
+
 from controls.IDBrowser import IDBrowser
 
 
@@ -15,7 +16,7 @@ class IDManager(wx.Dialog):
         # start IDBrowser in manager mode
         self.browser = IDBrowser(self, ctr)
         self.Bind(wx.EVT_CHAR_HOOK, self.OnEscapeKey)
-
+        self.CenterOnParent()
     def OnEscapeKey(self, event):
         keycode = event.GetKeyCode()
         if keycode == wx.WXK_ESCAPE:

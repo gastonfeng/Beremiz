@@ -22,23 +22,19 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 
 
-from __future__ import absolute_import
-from __future__ import print_function
+
 import socket
 import threading
+
 import zeroconf
 
-
-service_type = '_Beremiz._tcp.local.'
+service_type = '_PYRO._tcp.local.'
 
 
 class ServicePublisher(object):
-    def __init__(self, protocol):
+    def __init__(self):
         # type: fully qualified service type name
-        self.serviceproperties = {
-            'description': 'Beremiz remote PLC',
-            'protocol': protocol
-        }
+        self.serviceproperties = {'description': 'Beremiz remote PLC'}
 
         self.name = None
         self.ip_32b = None
@@ -56,19 +52,15 @@ class ServicePublisher(object):
 
     def _RegisterService(self, name, ip, port):
         # name: fully qualified service name
-        self.service_name = '%s.%s' % (name, service_type)
+        self.service_name = 'Beremiz_%s.%s' % (name, service_type)
         self.name = name
         self.port = port
 
+        self.server = zeroconf.Zeroconf()
+        print("MDNS brodcasting on :" + ip)
+
         if ip == "0.0.0.0":
-            print("MDNS brodcasted on all interfaces")
-            interfaces = zeroconf.InterfaceChoice.All
             ip = self.gethostaddr()
-        else:
-            interfaces = [ip]
-
-        self.server = zeroconf.Zeroconf(interfaces=interfaces)
-
         print("MDNS brodcasted service address :" + ip)
         self.ip_32b = socket.inet_aton(ip)
 

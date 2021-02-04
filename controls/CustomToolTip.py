@@ -22,10 +22,25 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-from __future__ import absolute_import
+
 import wx
 
-from controls.CustomStyledTextCtrl import faces
+if wx.Platform == '__WXMSW__':
+    faces = {
+        'times': 'Times New Roman',
+        'mono':  'Courier New',
+        'helv':  'Arial',
+        'other': 'Comic Sans MS',
+        'size':  10,
+    }
+else:
+    faces = {
+        'times': 'Times',
+        'mono':  'Courier',
+        'helv':  'Helvetica',
+        'other': 'new century schoolbook',
+        'size':  12,
+    }
 
 TOOLTIP_MAX_CHARACTERS = 30  # Maximum number of characters by line in ToolTip
 TOOLTIP_MAX_LINE = 5         # Maximum number of line in ToolTip
@@ -137,7 +152,7 @@ class CustomToolTip(wx.PopupWindow):
         max_width = max_height = 0
 
         # Create a memory DC for calculating text extent
-        dc = wx.MemoryDC(wx.EmptyBitmap(1, 1))
+        dc = wx.MemoryDC()
         dc.SetFont(self.Font)
 
         # Compute max tip text size
@@ -175,7 +190,7 @@ class CustomToolTip(wx.PopupWindow):
         dc.SetFont(self.Font)
 
         # Draw Tool tip
-        dc.BeginDrawing()
+        # dc.BeginDrawing()
         tip_width, tip_height = self.GetToolTipSize()
 
         # Draw background rectangle
@@ -188,6 +203,6 @@ class CustomToolTip(wx.PopupWindow):
             _line_width, line_height = dc.GetTextExtent(line)
             line_offset += line_height
 
-        dc.EndDrawing()
+        # dc.EndDrawing()
 
         event.Skip()

@@ -26,11 +26,15 @@
 # Package initialisation
 
 
-from __future__ import absolute_import
-from os import listdir, path
-from connectors.ConnectorBase import ConnectorBase
+import sys
 
-connectors_packages = ["PYRO", "WAMP"]
+from BackGround import Pyro_naming
+from connectors.ConnectorBase import ConnectorBase
+from util import paths
+
+_base_path = paths.AbsDir(__file__)
+sys.path.append(_base_path)
+connectors_packages = ["PYRO", "WAMP", "HTTP", "SOCKET", "SERIAL", "ESPLINK", "TCPLINK", "UDPLINK"]
 
 
 def _GetLocalConnectorClassFactory(name):
@@ -65,17 +69,19 @@ def ConnectorFactory(uri, confnodesroot):
     Return a connector corresponding to the URI
     or None if cannot connect to URI
     """
-    _scheme = uri.split("://")[0].upper()
+    servicetype = uri.split("://")[0].upper()
 
     # commented code to enable for MDNS:// support
     # _scheme, location = uri.split("://")
     # _scheme = _scheme.upper()
 
-    if _scheme == "LOCAL":
+    if servicetype == "LOCAL":
+        naming = Pyro_naming()
+
         # Local is special case
         # pyro connection to local runtime
         # started on demand, listening on random port
-        scheme = "PYRO"
+        servicetype = "PYRO"
         runtime_port = confnodesroot.AppFrame.StartLocalRuntime(
             taskbaricon=True)
         uri = "PYROLOC://127.0.0.1:" + str(runtime_port)
@@ -101,24 +107,21 @@ def ConnectorFactory(uri, confnodesroot):
     #         confnodesroot.logger.write_error(traceback.format_exc())
     #         return None
 
-    elif _scheme in connectors:
-        scheme = _scheme
-    elif _scheme[-1] == 'S' and _scheme[:-1] in connectors:
-        scheme = _scheme[:-1]
+    elif servicetype in connectors:
+        pass
+    elif servicetype[-1] == 'S' and servicetype[:-1] in connectors:
+        servicetype = servicetype[:-1]
     else:
         return None
 
     # import module according to uri type and get connector specific baseclass
     # first call to import the module,
     # then call with parameters to create the class
-    connector_specific_class = connectors[scheme]()(uri, confnodesroot)
+    connectorclass = connectors[servicetype]()
 
-    if connector_specific_class is None:
-        return None
 
     # new class inheriting from generic and specific connector base classes
-    return type(_scheme + "_connector",
-                (ConnectorBase, connector_specific_class), {})()
+    return connectorclass(uri, confnodesroot)
 
 
 def EditorClassFromScheme(scheme):

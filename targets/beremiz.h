@@ -2,8 +2,13 @@
 #define _BEREMIZ_H_
 
 /* Beremiz' header file for use by extensions */
-
+#if PLATFORMIO == 40100   //platform=windows_x86
 #include "iec_types.h"
+#else
+#include "iec_types_all.h"
+#include "POUS.h"
+#include "accessor.h"
+#endif
 
 #define LOG_LEVELS 4
 #define LOG_CRITICAL 0
@@ -22,9 +27,16 @@ static inline int LogMessage(uint8_t level, char* buf, uint32_t size)
 	return 0;
 }
 #else
-int     LogMessage(uint8_t level, char* buf, uint32_t size);
+#ifdef __cplusplus
+extern "C"
+#endif
+int	LogMessage(uint8_t level, char *buf, uint32_t size);
 #endif
 
-long AtomicCompareExchange(long* atomicvar,long compared, long exchange);
+#ifdef __cplusplus
+extern "C"
+#endif
+long	AtomicCompareExchange(long *atomicvar, long compared, long exchange);
+
 
 #endif

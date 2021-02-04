@@ -1,5 +1,5 @@
-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
-<PyFile>
+<?xml version='1.0' encoding='utf-8'?>
+<PyFile xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <variables>
     <variable name="WiiNunchuckStickX" type="INT"/>
     <variable name="WiiNunchuckStickY" type="INT"/>
@@ -10,7 +10,7 @@
     <variable name="WiiButtons" type="WORD"/>
   </variables>
   <globals>
-<![CDATA[
+    <xhtml:p><![CDATA[
 import cwiid,commands,sys,re,os,time
 
 wiimote = None
@@ -79,24 +79,24 @@ def Disconnect_Wiimote():
     wiimote = None
     PLCObject.LogMessage("Wiimote disconnected")
 
-]]>
+]]></xhtml:p>
   </globals>
   <init>
-<![CDATA[
-]]>
+    <xhtml:p><![CDATA[
+]]></xhtml:p>
   </init>
   <cleanup>
-<![CDATA[
+    <xhtml:p><![CDATA[
 Disconnect_Wiimote()
 
-]]>
+]]></xhtml:p>
   </cleanup>
   <start>
-<![CDATA[
-]]>
+    <xhtml:p><![CDATA[
+]]></xhtml:p>
   </start>
   <stop>
-<![CDATA[
-]]>
+    <xhtml:p><![CDATA[
+]]></xhtml:p>
   </stop>
 </PyFile>

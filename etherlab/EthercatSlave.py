@@ -9,15 +9,13 @@
 #
 # See COPYING file for copyrights details.
 
-from __future__ import absolute_import
 
-from PLCControler import LOCATION_CONFNODE, LOCATION_VAR_INPUT, LOCATION_VAR_OUTPUT, LOCATION_VAR_MEMORY
 from ConfigTreeNode import ConfigTreeNode
-
-from etherlab.ConfigEditor import NodeEditor
-
 # ------------------------------------------
 from etherlab.CommonEtherCATFunction import _CommonSlave
+from etherlab.ConfigEditor import NodeEditor
+from plcopen.types_enums import LOCATION_CONFNODE, LOCATION_VAR_INPUT, LOCATION_VAR_OUTPUT, LOCATION_VAR_MEMORY
+
 # ------------------------------------------
 
 
@@ -73,6 +71,8 @@ class _EthercatSlaveCTN(object):
     def __init__(self):
         # ----------- call ethercat mng. function --------------
         self.CommonMethod = _CommonSlave(self)
+        self.SelectedRxPDOIndex = []
+        self.SelectedTxPDOIndex = []
 
     def GetIconName(self):
         return "Slave"

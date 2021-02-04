@@ -23,23 +23,20 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
 import os
 import re
 import traceback
-from builtins import str as text
 from copy import deepcopy
 
 from lxml import etree
+
+from ConfigTreeNode import XSDSchemaErrorMessage
+from PLCControler import UndoBuffer
+from editors.CodeFileEditor import GetSectionsText
+from plcopen.plcopen import TestTextElement
 from xmlclass import GenerateParserFromXSDstring
 
-from PLCControler import UndoBuffer
-from ConfigTreeNode import XSDSchemaErrorMessage
-
-from plcopen.plcopen import TestTextElement
-from editors.CodeFileEditor import GetSectionsText
-
-CODEFILE_XSD = """<?xml version="1.0" encoding="ISO-8859-1" ?>
+CODEFILE_XSD = """<?xml version="1.0" encoding="utf-8" ?>
 <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema"
             xmlns:xhtml="http://www.w3.org/1999/xhtml">
   <xsd:element name="%(codefile_name)s">
@@ -89,7 +86,6 @@ SECTION_TAG_ELEMENT = "<xsd:element name=\"%s\" type=\"CodeText\"/>"
 
 
 class CodeFile(object):
-
     CODEFILE_NAME = "CodeFile"
     SECTIONS_NAMES = []
 
@@ -109,7 +105,7 @@ class CodeFile(object):
 
         filepath = self.CodeFileName()
         if os.path.isfile(filepath):
-            xmlfile = open(filepath, 'r')
+            xmlfile = open(filepath, 'r', encoding='utf-8')
             codefile_xml = xmlfile.read()
             xmlfile.close()
 
@@ -117,8 +113,8 @@ class CodeFile(object):
                 '<%s>' % self.CODEFILE_NAME,
                 '<%s xmlns:xhtml="http://www.w3.org/1999/xhtml">' % self.CODEFILE_NAME)
             for cre, repl in [
-                    (re.compile(r"(?<!<xhtml:p>)(?:<!\[CDATA\[)"), "<xhtml:p><![CDATA["),
-                    (re.compile(r"(?:]]>)(?!</xhtml:p>)"), "]]></xhtml:p>")]:
+                (re.compile(r"(?<!<xhtml:p>)(?:<!\[CDATA\[)"), "<xhtml:p><![CDATA["),
+                (re.compile(r"(?:]]>)(?!</xhtml:p>)"), "]]></xhtml:p>")]:
                 codefile_xml = cre.sub(repl, codefile_xml)
 
             try:
@@ -128,9 +124,9 @@ class CodeFile(object):
                     self.GetCTRoot().logger.write_warning(XSDSchemaErrorMessage.format(a1=fname, a2=lnum, a3=src))
                 self.CreateCodeFileBuffer(True)
             except Exception as exc:
-                msg = _("Couldn't load confnode parameters {a1} :\n {a2}").format(a1=self.CTNName(), a2=text(exc))
+                msg = _("Couldn't load confnode parameters {a1} :\n {a2}").format(a1=self.CTNName(), a2=str(exc))
                 self.GetCTRoot().logger.write_error(msg)
-                self.GetCTRoot().logger.write_error(traceback.format_exc())
+                print(traceback.format_exc())
                 raise Exception
         else:
             self.CodeFile = self.CodeFileParser.CreateRoot()
@@ -165,12 +161,12 @@ class CodeFile(object):
         datas = []
         for var in self.CodeFileVariables(self.CodeFile):
             datas.append({
-                "Name":        var.getname(),
-                "Type":        var.gettype(),
-                "Initial":     var.getinitial(),
+                "Name": var.getname(),
+                "Type": var.gettype(),
+                "Initial": var.getinitial(),
                 "Description": var.getdesc(),
-                "OnChange":    var.getonchange(),
-                "Options":     var.getopts(),
+                "OnChange": var.getonchange(),
+                "Options": var.getopts(),
             })
         return datas
 
@@ -190,12 +186,12 @@ class CodeFile(object):
     def OnCTNSave(self, from_project_path=None):
         filepath = self.CodeFileName()
 
-        xmlfile = open(filepath, "w")
+        xmlfile = open(filepath, "w", encoding='utf-8')
         xmlfile.write(etree.tostring(
             self.CodeFile,
             pretty_print=True,
             xml_declaration=True,
-            encoding='utf-8'))
+            encoding='utf-8').decode())
         xmlfile.close()
 
         self.MarkCodeFileAsSaved()
@@ -207,7 +203,7 @@ class CodeFile(object):
                 variable.gettype(),
                 variable.getinitial())
                for variable in variables]
-        ret.extend([("On"+variable.getname()+"Change", "python_poll", "")
+        ret.extend([("On" + variable.getname() + "Change", "python_poll", "")
                     for variable in variables
                     if variable.getonchange()])
         return ret
@@ -222,12 +218,11 @@ class CodeFile(object):
                             for result in TestTextElement(varname, criteria)])
         results.extend([((tagname, "body"),) + result
                         for result in TestTextElement(
-                            GetSectionsText(self, lambda x:""), criteria)])
+                GetSectionsText(self, lambda x: ""), criteria)])
         return results
-
-# -------------------------------------------------------------------------------
-#                      Current Buffering Management Functions
-# -------------------------------------------------------------------------------
+    # -------------------------------------------------------------------------------
+    #                      Current Buffering Management Functions
+    # -------------------------------------------------------------------------------
 
     def Copy(self, model):
         """

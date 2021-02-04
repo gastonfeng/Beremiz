@@ -9,13 +9,13 @@
 
 # See COPYING file for copyrights details.
 
-from __future__ import absolute_import
-from __future__ import print_function
-import sys
-import os
 
-import Pyro
-import Pyro.core as pyro
+import os
+import sys
+
+import Pyro4
+from Pyro4 import Daemon, config
+
 import runtime
 from runtime.ServicePublisher import ServicePublisher
 
@@ -47,25 +47,28 @@ class PyroServer(object):
             self.Publish()
 
         while self.continueloop:
-            Pyro.config.PYRO_MULTITHREADED = 0
-            pyro.initServer()
-            self.daemon = pyro.Daemon(host=self.ip_addr, port=self.port)
+            # config.PYRO_MULTITHREADED = 0
+            server = runtime.GetPLCObjectSingleton()
+            self.daemon = Daemon(host=self.ip_addr, port=self.port)
 
             # pyro never frees memory after connection close if no timeout set
             # taking too small timeout value may cause
             # unwanted diconnection when IDE is kept busy for long periods
-            self.daemon.setTimeout(60)
+            # self.daemon.setTimeout(60)
 
-            pyro_obj = Pyro.core.ObjBase()
-            pyro_obj.delegateTo(runtime.GetPLCObjectSingleton())
+            # pyro_obj = core.ObjBase()
+            # pyro_obj.delegateTo(runtime.GetPLCObjectSingleton())
 
-            self.daemon.connect(pyro_obj, "PLCObject")
-
+            # self.daemon.connect(pyro_obj, "PLCObject")
+            ns = Pyro4.locateNS()
+            uri = self.daemon.register(server)
+            ns.register("PLCObject", uri)
+            print("Ready. Object uri =", uri)
             when_ready()
             self.piper,self.pipew = os.pipe()
-            self.daemon.requestLoop(others=[self.piper], callback=lambda x:None)
+            self.daemon.requestLoop()
             self.piper, self.pipew = None, None
-            if hasattr(self,'sock'):
+            if hasattr(self, 'sock'):
                 self.daemon.sock.close()
         self.Unpublish()
 

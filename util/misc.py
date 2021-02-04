@@ -25,9 +25,7 @@
 """
 Misc definitions
 """
-
-
-from __future__ import absolute_import
+import locale
 import os
 from functools import reduce
 
@@ -48,21 +46,16 @@ def CheckPathPerm(path):
     return True
 
 
-def GetClassImporter(param):
-    """
-    is used to resolve library class names in features.py
-    if param is a string, returns a callable that return the class pointed by param
-    if a class is given, then returns a callable that returns the given class.
-    """
+def GetClassImporter(classpath):
 
-    if isinstance(param, str):
-        def factory():
+    if isinstance(classpath, str):
+        def fac():
             # on-demand import, only when using class
-            mod = __import__(param.rsplit('.', 1)[0])
-            return reduce(getattr, param.split('.')[1:], mod)
-        return factory
+            mod = __import__(classpath.rsplit('.', 1)[0])
+            return reduce(getattr, classpath.split('.')[1:], mod)
+        return fac
     else:
-        return lambda: param
+        return classpath
 
 
 def InstallLocalRessources(CWD):
@@ -71,3 +64,6 @@ def InstallLocalRessources(CWD):
 
     # Internationalization
     AddCatalog(os.path.join(CWD, "locale"))
+    ## windows7环境下，执行代码报ValueError: embedded null byte时，在原代码前面加一行代码：locale.setlocale(locale.LC_ALL,'en')即可解决
+    locale.setlocale(locale.LC_ALL, 'en')
+    locale.setlocale(locale.LC_CTYPE, 'chinese')

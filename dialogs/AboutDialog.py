@@ -30,11 +30,13 @@
 This module contains classes extended from wx.Dialog used by the GUI.
 """
 
-
-from __future__ import absolute_import
+# from __future__ import absolute_import
 import os
+
 import wx
-from wx.lib.agw.hyperlink import HyperLinkCtrl
+
+from APPVersion import appchannel
+from mywork.qtbase.configini import configini
 
 
 class AboutDialog(wx.Dialog):
@@ -42,6 +44,7 @@ class AboutDialog(wx.Dialog):
     A replacement About Dialog for Windows, as it uses a generic frame that
     well...sucks.
     """
+
     def __init__(self, parent, info):
         title = _("About") + " " + info.Name
         wx.Dialog.__init__(self, parent, title=title)
@@ -51,37 +54,53 @@ class AboutDialog(wx.Dialog):
             self.SetIcon(parent.GetIcon())
 
         image = None
-        if self.info.Icon:
-            bitmap = wx.BitmapFromIcon(self.info.Icon)
-            image = wx.StaticBitmap(self, bitmap=bitmap)
+        # if self.info.Icon:
+        #     bitmap = wx.Bitmap(self.info.Icon)
+        #     image = wx.StaticBitmap(self, bitmap=bitmap)
 
         name = wx.StaticText(self, label="%s %s" % (info.Name, info.Version))
-        description = wx.StaticText(self, label=info.Description)
-        description.Wrap(400)
+        # description = wx.StaticText(self, label=info.Description)
+        # description.Wrap(400)
         copyright = wx.StaticText(self, label=info.Copyright)
-        url = HyperLinkCtrl(self, label=info.WebSite[0], URL=info.WebSite[1])
+        # url = HyperLinkCtrl(self, label=info.WebSite[0], URL=info.WebSite[1])
 
         font = name.GetClassDefaultAttributes().font
         font.SetWeight(wx.FONTWEIGHT_BOLD)
         font.SetPointSize(18)
         name.SetFont(font)
 
-        credits = wx.Button(self, id=wx.ID_ABOUT, label=_("C&redits"))
-        license = wx.Button(self, label=_("&License"))
+        sel = configini().get('Version', "updateChannel", appchannel)
+
+        upbox = wx.StaticBox(self, label=_("update channel"))
+        updatechannel = wx.StaticBoxSizer(upbox, wx.HORIZONTAL)
+        beta = wx.RadioButton(self, label=_('beta'))
+        stable = wx.RadioButton(self, label=_('stable'))
+        if sel == 'beta':
+            beta.SetValue(True)
+        else:
+            stable.SetValue(True)
+        self.Bind(wx.EVT_RADIOBUTTON, self.on_channel_beta, beta)
+        self.Bind(wx.EVT_RADIOBUTTON, self.on_channel_stable, stable)
+        updatechannel.Add(beta, flag=wx.GROW | wx.LEFT, border=5)
+        updatechannel.Add(stable, flag=wx.GROW | wx.LEFT, border=5)
+
+        # credits = wx.Button(self, id=wx.ID_ABOUT, label=_("C&redits"))
+        # license = wx.Button(self, label=_("&License"))
         close = wx.Button(self, id=wx.ID_CANCEL, label=_("&Close"))
 
         btnSizer = wx.BoxSizer(wx.HORIZONTAL)
-        btnSizer.Add(credits, flag=wx.CENTER | wx.LEFT | wx.RIGHT, border=5)
-        btnSizer.Add(license, flag=wx.CENTER | wx.RIGHT, border=5)
+        # btnSizer.Add(credits, flag=wx.CENTER | wx.LEFT | wx.RIGHT, border=5)
+        # btnSizer.Add(license, flag=wx.CENTER | wx.RIGHT, border=5)
         btnSizer.Add(close, flag=wx.CENTER | wx.RIGHT, border=5)
 
         sizer = wx.BoxSizer(wx.VERTICAL)
         if image:
             sizer.Add(image, flag=wx.CENTER | wx.TOP | wx.BOTTOM, border=5)
         sizer.Add(name, flag=wx.CENTER | wx.BOTTOM, border=10)
-        sizer.Add(description, flag=wx.CENTER | wx.BOTTOM, border=10)
+        # sizer.Add(description, flag=wx.CENTER | wx.BOTTOM, border=10)
         sizer.Add(copyright, flag=wx.CENTER | wx.BOTTOM, border=10)
-        sizer.Add(url, flag=wx.CENTER | wx.BOTTOM, border=15)
+        # sizer.Add(url, flag=wx.CENTER | wx.BOTTOM, border=15)
+        sizer.Add(updatechannel, flag=wx.GROW | wx.LEFT, border=5)
         sizer.Add(btnSizer, flag=wx.CENTER | wx.BOTTOM, border=5)
 
         container = wx.BoxSizer(wx.VERTICAL)
@@ -93,9 +112,15 @@ class AboutDialog(wx.Dialog):
         self.Show(True)
         self.SetEscapeId(close.GetId())
 
-        credits.Bind(wx.EVT_BUTTON, self.on_credits)
-        license.Bind(wx.EVT_BUTTON, self.on_license)
+        # credits.Bind(wx.EVT_BUTTON, self.on_credits)
+        # license.Bind(wx.EVT_BUTTON, self.on_license)
         close.Bind(wx.EVT_BUTTON, lambda evt: self.Destroy())
+
+    def on_channel_stable(self, event):
+        configini().put('Version', "updateChannel", "stable")
+
+    def on_channel_beta(self, event):
+        configini().put('Version', "updateChannel", "beta")
 
     def on_license(self, event):
         LicenseDialog(self, self.info)
@@ -136,6 +161,7 @@ class CreditsDialog(wx.Dialog):
         self.Layout()
         self.Show()
         self.SetEscapeId(close.GetId())
+        self.Centre()
 
         close.Bind(wx.EVT_BUTTON, lambda evt: self.Destroy())
 
@@ -166,6 +192,7 @@ class LicenseDialog(wx.Dialog):
         self.SetEscapeId(close.GetId())
 
         close.Bind(wx.EVT_BUTTON, lambda evt: self.Destroy())
+        self.Centre()
 
 
 def ShowAboutDialog(parent, info):

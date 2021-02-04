@@ -22,15 +22,15 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-from __future__ import absolute_import
+
 import os
 
-from c_ext.CFileEditor import CFileEditor
 from CodeFileTreeNode import CodeFile
+from c_ext.CFileEditor import CFileEditor
 
 
 class CFile(CodeFile):
-    XSD = """<?xml version="1.0" encoding="ISO-8859-1" ?>
+    XSD = """<?xml version="1.0" encoding="utf-8" ?>
     <xsd:schema xmlns:xsd="http://www.w3.org/2001/XMLSchema">
       <xsd:element name="CExtension">
         <xsd:complexType>
@@ -101,9 +101,10 @@ class CFile(CodeFile):
         text += self.CodeFile.globals.getanyText().strip()
         text += "\n"
 
+        text += 'extern "C"{'
         # Adding Beremiz confnode functions
         text += "/* Beremiz confnode functions */\n"
-        text += "int __init_%s(int argc,char **argv)\n{\n" % location_str
+        text += "int __init_%s()\n{\n" % location_str
         text += self.CodeFile.initFunction.getanyText().strip()
         text += "  return 0;\n}\n\n"
 
@@ -118,12 +119,14 @@ class CFile(CodeFile):
         text += "void __publish_%s(void)\n{\n" % location_str
         text += self.CodeFile.publishFunction.getanyText().strip()
         text += "\n}\n\n"
+        text += "\n}\n\n"
 
-        Gen_Cfile_path = os.path.join(buildpath, "CFile_%s.c" % location_str)
-        cfile = open(Gen_Cfile_path, 'w')
+        Gen_Cfile_path = os.path.join(buildpath, "CFile_%s.cpp" % location_str)
+        cfile = open(Gen_Cfile_path, 'w', encoding='utf-8')
         cfile.write(text)
         cfile.close()
 
         matiec_CFLAGS = '"-I%s"' % os.path.abspath(self.GetCTRoot().GetIECLibPath())
-
-        return [(Gen_Cfile_path, str(self.CExtension.getCFLAGS() + matiec_CFLAGS))], str(self.CExtension.getLDFLAGS()), True
+        # return LibCFilesAndCFLAGS, LibLDFLAGS, Libs, LibExtraFiles
+        return [(Gen_Cfile_path, str(self.CExtension.getCFLAGS() + matiec_CFLAGS))], str(
+            self.CExtension.getLDFLAGS()), True, []

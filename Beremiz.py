@@ -23,17 +23,24 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
-from __future__ import print_function
+import getopt
 import os
 import sys
-import getopt
-from past.builtins import execfile
+from asyncio.events import get_event_loop
 
 import wx
+from past.builtins import execfile
 from wx.lib.agw.advancedsplash import AdvancedSplash, AS_NOTIMEOUT, AS_CENTER_ON_SCREEN
 
-import util.paths as paths
+from BeremizIDE import Beremiz
+from oem import oem
+from wxasync.src.wxasync import WxAsyncApp, StartCoroutine
+
+sys.path.append('.')
+
+from APPVersion import appversion, appchannel
+from alpha import alpha_test
+from util import paths
 
 
 class BeremizIDELauncher(object):
@@ -43,13 +50,16 @@ class BeremizIDELauncher(object):
         self.updateinfo_url = None
         self.extensions = []
         self.app_dir = paths.AbsDir(__file__)
+        if hasattr(sys, 'frozen'):
+            self.app_dir = os.path.join(self.app_dir, '..')
         self.projectOpen = None
         self.buildpath = None
         self.splash = None
-        self.splashPath = self.Bpath("images", "splash.png")
+        self.splashPath = self.Bpath("images", oem.logo)
         self.modules = ["BeremizIDE"]
         self.debug = os.path.exists("BEREMIZ_DEBUG")
         self.handle_exception = None
+        self.test = False
 
     def Bpath(self, *args):
         return os.path.join(self.app_dir, *args)
@@ -66,8 +76,8 @@ class BeremizIDELauncher(object):
         print("")
 
     def SetCmdOptions(self):
-        self.shortCmdOpts = "hu:e:"
-        self.longCmdOpts = ["help", "updatecheck=", "extend="]
+        self.shortCmdOpts = "htu:e:"
+        self.longCmdOpts = ["help", "test", "updatecheck=", "extend="]
 
     def ProcessOption(self, o, a):
         if o in ("-h", "--help"):
@@ -77,6 +87,8 @@ class BeremizIDELauncher(object):
             self.updateinfo_url = a
         if o in ("-e", "--extend"):
             self.extensions.append(a)
+        if o in ("-t", "--test"):
+            self.test = True
 
     def ProcessCommandLineArgs(self):
         self.SetCmdOptions()
@@ -103,18 +115,15 @@ class BeremizIDELauncher(object):
 
     def CreateApplication(self):
 
-        BeremizAppType = wx.App if wx.VERSION >= (3, 0, 0) else wx.PySimpleApp
-
-        class BeremizApp(BeremizAppType):
+        class BeremizApp(WxAsyncApp):
             def OnInit(_self):  # pylint: disable=no-self-argument
                 self.ShowSplashScreen()
                 return True
 
-        self.app = BeremizApp(redirect=self.debug)
-        self.app.SetAppName('beremiz')
-        if wx.VERSION < (3, 0, 0):
-            wx.InitAllImageHandlers()
+        self.app = BeremizApp()
+        self.app.SetAppName(oem.title)
 
+    @alpha_test
     def ShowSplashScreen(self):
         class Splash(AdvancedSplash):
             Painted = False
@@ -124,16 +133,17 @@ class BeremizIDELauncher(object):
                 if not _self.Painted:  # trigger app start only once
                     _self.Painted = True
                     wx.CallAfter(self.AppStart)
+
         bmp = wx.Image(self.splashPath).ConvertToBitmap()
-        self.splash = Splash(None,
-                             bitmap=bmp,
-                             agwStyle=AS_NOTIMEOUT | AS_CENTER_ON_SCREEN)
+        self.splash = Splash(None, bitmap=bmp, agwStyle=AS_NOTIMEOUT | AS_CENTER_ON_SCREEN)
 
     def BackgroundInitialization(self):
         self.InitI18n()
-        self.CheckUpdates()
+        # self.CheckUpdates()
         self.LoadExtensions()
-        self.ImportModules()
+        # self.ImportModules()
+        # if appchannel == 'alpha':
+        #     self.alpha = alphaView()
 
     def InitI18n(self):
         from util.misc import InstallLocalRessources
@@ -169,7 +179,7 @@ class BeremizIDELauncher(object):
 
             from threading import Thread
             self.splash.SetText(text=self.updateinfo)
-            updateinfoThread = Thread(target=updateinfoproc)
+            updateinfoThread = Thread(target=updateinfoproc, name='updateinfoproc')
             updateinfoThread.start()
             updateinfoThread.join(2)
             self.splash.SetText(text=self.updateinfo)
@@ -180,12 +190,12 @@ class BeremizIDELauncher(object):
             setattr(self, modname, mod)
 
     def InstallExceptionHandler(self):
-        import version
         import util.ExceptionHandler
-        self.handle_exception = util.ExceptionHandler.AddExceptHook(version.app_version)
+        self.handle_exception = util.ExceptionHandler.AddExceptHook(appversion)
 
     def CreateUI(self):
-        self.frame = self.BeremizIDE.Beremiz(None, self.projectOpen, self.buildpath)
+        self.frame = Beremiz(self.app, self.projectOpen, self.buildpath)
+        self.app.SetTopWindow(self.frame)
 
     def CloseSplash(self):
         if self.splash:
@@ -199,25 +209,28 @@ class BeremizIDELauncher(object):
         self.CreateApplication()
 
     def AppStart(self):
-        try:
-            self.BackgroundInitialization()
-            self.CreateUI()
-            self.CloseSplash()
-            self.ShowUI()
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except Exception:
-            if self.handle_exception is not None:
-                self.handle_exception(*sys.exc_info(), exit=True)
-            else:
-                raise
+        self.BackgroundInitialization()
+        self.CreateUI()
+        self.CloseSplash()
+        self.ShowUI()
+        if self.test:
+            StartCoroutine(self.frame.test, self.frame)
+            self.app.ExitMainLoop()
 
     def MainLoop(self):
-        self.app.MainLoop()
+        import sys
+        if '--inspect' in sys.argv:
+            import wx.lib.inspection
+            wx.lib.inspection.InspectionTool().Show()
+        loop = get_event_loop()
+        loop.run_until_complete(self.app.MainLoop())
+        # if appchannel == 'alpha':
+        #     self.alpha.shutdown()
 
     def Start(self):
         self.PreStart()
-        self.InstallExceptionHandler()
+        if appchannel != 'alpha':
+            self.InstallExceptionHandler()
         self.MainLoop()
 
 

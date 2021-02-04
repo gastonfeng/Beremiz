@@ -1,5 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
-<BeremizRoot xmlns:xsd="http://www.w3.org/2001/XMLSchema" URI_location="LOCAL://">
-  <TargetType/>
+<BeremizRoot URI_location="TCPLINK://192.168.31.100:80">
+  <TargetType>
+      <pio/>
+  </TargetType>
   <Libraries Enable_Python_Library="false"/>
 </BeremizRoot>

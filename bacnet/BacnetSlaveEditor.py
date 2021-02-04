@@ -23,285 +23,283 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
-from __future__ import absolute_import
+# from __future__ import absolute_import
 from collections import Counter
 
 import wx
 
-# Import some libraries on Beremiz code
-from util.BitmapLibrary import GetBitmap
 from controls.CustomGrid import CustomGrid
 from controls.CustomTable import CustomTable
 from editors.ConfTreeNodeEditor import ConfTreeNodeEditor
 from graphics.GraphicCommons import ERROR_HIGHLIGHT
-
+# Import some libraries on Beremiz code
+from util.BitmapLibrary import GetBitmap
 
 # BACnet Engineering units taken from: ASHRAE 135-2016, clause/chapter 21
 BACnetEngineeringUnits = [
-    ('(Acceleration) meters-per-second-per-second (166)',              166),
-    ('(Area) square-meters (0)',                                       0),
-    ('(Area) square-centimeters (116)',                                116),
-    ('(Area) square-feet (1)',                                         1),
-    ('(Area) square-inches (115)',                                     115),
-    ('(Currency) currency1 (105)',                                     105),
-    ('(Currency) currency2 (106)',                                     106),
-    ('(Currency) currency3 (107)',                                     107),
-    ('(Currency) currency4 (108)',                                     108),
-    ('(Currency) currency5 (109)',                                     109),
-    ('(Currency) currency6 (110)',                                     110),
-    ('(Currency) currency7 (111)',                                     111),
-    ('(Currency) currency8 (112)',                                     112),
-    ('(Currency) currency9 (113)',                                     113),
-    ('(Currency) currency10 (114)',                                    114),
-    ('(Electrical) milliamperes (2)',                                  2),
-    ('(Electrical) amperes (3)',                                       3),
-    ('(Electrical) amperes-per-meter (167)',                           167),
-    ('(Electrical) amperes-per-square-meter (168)',                    168),
-    ('(Electrical) ampere-square-meters (169)',                        169),
-    ('(Electrical) decibels (199)',                                    199),
-    ('(Electrical) decibels-millivolt (200)',                          200),
-    ('(Electrical) decibels-volt (201)',                               201),
-    ('(Electrical) farads (170)',                                      170),
-    ('(Electrical) henrys (171)',                                      171),
-    ('(Electrical) ohms (4)',                                          4),
-    ('(Electrical) ohm-meter-squared-per-meter (237)',                 237),
-    ('(Electrical) ohm-meters (172)',                                  172),
-    ('(Electrical) milliohms (145)',                                   145),
-    ('(Electrical) kilohms (122)',                                     122),
-    ('(Electrical) megohms (123)',                                     123),
-    ('(Electrical) microsiemens (190)',                                190),
-    ('(Electrical) millisiemens (202)',                                202),
-    ('(Electrical) siemens (173)',                                     173),
-    ('(Electrical) siemens-per-meter (174)',                           174),
-    ('(Electrical) teslas (175)',                                      175),
-    ('(Electrical) volts (5)',                                         5),
-    ('(Electrical) millivolts (124)',                                  124),
-    ('(Electrical) kilovolts (6)',                                     6),
-    ('(Electrical) megavolts (7)',                                     7),
-    ('(Electrical) volt-amperes (8)',                                  8),
-    ('(Electrical) kilovolt-amperes (9)',                              9),
-    ('(Electrical) megavolt-amperes (10)',                             10),
-    ('(Electrical) volt-amperes-reactive (11)',                        11),
-    ('(Electrical) kilovolt-amperes-reactive (12)',                    12),
-    ('(Electrical) megavolt-amperes-reactive (13)',                    13),
-    ('(Electrical) volts-per-degree-kelvin (176)',                     176),
-    ('(Electrical) volts-per-meter (177)',                             177),
-    ('(Electrical) degrees-phase (14)',                                14),
-    ('(Electrical) power-factor (15)',                                 15),
-    ('(Electrical) webers (178)',                                      178),
-    ('(Energy) ampere-seconds (238)',                                  238),
-    ('(Energy) volt-ampere-hours (239)',                               239),
-    ('(Energy) kilovolt-ampere-hours (240)',                           240),
-    ('(Energy) megavolt-ampere-hours (241)',                           241),
-    ('(Energy) volt-ampere-hours-reactive (242)',                      242),
-    ('(Energy) kilovolt-ampere-hours-reactive (243)',                  243),
-    ('(Energy) megavolt-ampere-hours-reactive (244)',                  244),
-    ('(Energy) volt-square-hours (245)',                               245),
-    ('(Energy) ampere-square-hours (246)',                             246),
-    ('(Energy) joules (16)',                                           16),
-    ('(Energy) kilojoules (17)',                                       17),
-    ('(Energy) kilojoules-per-kilogram (125)',                         125),
-    ('(Energy) megajoules (126)',                                      126),
-    ('(Energy) watt-hours (18)',                                       18),
-    ('(Energy) kilowatt-hours (19)',                                   19),
-    ('(Energy) megawatt-hours (146)',                                  146),
-    ('(Energy) watt-hours-reactive (203)',                             203),
-    ('(Energy) kilowatt-hours-reactive (204)',                         204),
-    ('(Energy) megawatt-hours-reactive (205)',                         205),
-    ('(Energy) btus (20)',                                             20),
-    ('(Energy) kilo-btus (147)',                                       147),
-    ('(Energy) mega-btus (148)',                                       148),
-    ('(Energy) therms (21)',                                           21),
-    ('(Energy) ton-hours (22)',                                        22),
-    ('(Enthalpy) joules-per-kilogram-dry-air (23)',                    23),
-    ('(Enthalpy) kilojoules-per-kilogram-dry-air (149)',               149),
-    ('(Enthalpy) megajoules-per-kilogram-dry-air (150)',               150),
-    ('(Enthalpy) btus-per-pound-dry-air (24)',                         24),
-    ('(Enthalpy) btus-per-pound (117)',                                117),
-    ('(Entropy) joules-per-degree-kelvin (127)',                       127),
-    ('(Entropy) kilojoules-per-degree-kelvin (151)',                   151),
-    ('(Entropy) megajoules-per-degree-kelvin (152)',                   152),
-    ('(Entropy) joules-per-kilogram-degree-kelvin (128)',              128),
-    ('(Force) newton (153)',                                           153),
-    ('(Frequency) cycles-per-hour (25)',                               25),
-    ('(Frequency) cycles-per-minute (26)',                             26),
-    ('(Frequency) hertz (27)',                                         27),
-    ('(Frequency) kilohertz (129)',                                    129),
-    ('(Frequency) megahertz (130)',                                    130),
-    ('(Frequency) per-hour (131)',                                     131),
-    ('(Humidity) grams-of-water-per-kilogram-dry-air (28)',            28),
-    ('(Humidity) percent-relative-humidity (29)',                      29),
-    ('(Length) micrometers (194)',                                     194),
-    ('(Length) millimeters (30)',                                      30),
-    ('(Length) centimeters (118)',                                     118),
-    ('(Length) kilometers (193)',                                      193),
-    ('(Length) meters (31)',                                           31),
-    ('(Length) inches (32)',                                           32),
-    ('(Length) feet (33)',                                             33),
-    ('(Light) candelas (179)',                                         179),
-    ('(Light) candelas-per-square-meter (180)',                        180),
-    ('(Light) watts-per-square-foot (34)',                             34),
-    ('(Light) watts-per-square-meter (35)',                            35),
-    ('(Light) lumens (36)',                                            36),
-    ('(Light) luxes (37)',                                             37),
-    ('(Light) foot-candles (38)',                                      38),
-    ('(Mass) milligrams (196)',                                        196),
-    ('(Mass) grams (195)',                                             195),
-    ('(Mass) kilograms (39)',                                          39),
-    ('(Mass) pounds-mass (40)',                                        40),
-    ('(Mass) tons (41)',                                               41),
-    ('(Mass Flow) grams-per-second (154)',                             154),
-    ('(Mass Flow) grams-per-minute (155)',                             155),
-    ('(Mass Flow) kilograms-per-second (42)',                          42),
-    ('(Mass Flow) kilograms-per-minute (43)',                          43),
-    ('(Mass Flow) kilograms-per-hour (44)',                            44),
-    ('(Mass Flow) pounds-mass-per-second (119)',                       119),
-    ('(Mass Flow) pounds-mass-per-minute (45)',                        45),
-    ('(Mass Flow) pounds-mass-per-hour (46)',                          46),
-    ('(Mass Flow) tons-per-hour (156)',                                156),
-    ('(Power) milliwatts (132)',                                       132),
-    ('(Power) watts (47)',                                             47),
-    ('(Power) kilowatts (48)',                                         48),
-    ('(Power) megawatts (49)',                                         49),
-    ('(Power) btus-per-hour (50)',                                     50),
-    ('(Power) kilo-btus-per-hour (157)',                               157),
-    ('(Power) joule-per-hours (247)',                                  247),
-    ('(Power) horsepower (51)',                                        51),
-    ('(Power) tons-refrigeration (52)',                                52),
-    ('(Pressure) pascals (53)',                                        53),
-    ('(Pressure) hectopascals (133)',                                  133),
-    ('(Pressure) kilopascals (54)',                                    54),
-    ('(Pressure) millibars (134)',                                     134),
-    ('(Pressure) bars (55)',                                           55),
-    ('(Pressure) pounds-force-per-square-inch (56)',                   56),
-    ('(Pressure) millimeters-of-water (206)',                          206),
-    ('(Pressure) centimeters-of-water (57)',                           57),
-    ('(Pressure) inches-of-water (58)',                                58),
-    ('(Pressure) millimeters-of-mercury (59)',                         59),
-    ('(Pressure) centimeters-of-mercury (60)',                         60),
-    ('(Pressure) inches-of-mercury (61)',                              61),
-    ('(Temperature) degrees-celsius (62)',                             62),
-    ('(Temperature) degrees-kelvin (63)',                              63),
-    ('(Temperature) degrees-kelvin-per-hour (181)',                    181),
-    ('(Temperature) degrees-kelvin-per-minute (182)',                  182),
-    ('(Temperature) degrees-fahrenheit (64)',                          64),
-    ('(Temperature) degree-days-celsius (65)',                         65),
-    ('(Temperature) degree-days-fahrenheit (66)',                      66),
-    ('(Temperature) delta-degrees-fahrenheit (120)',                   120),
-    ('(Temperature) delta-degrees-kelvin (121)',                       121),
-    ('(Time) years (67)',                                              67),
-    ('(Time) months (68)',                                             68),
-    ('(Time) weeks (69)',                                              69),
-    ('(Time) days (70)',                                               70),
-    ('(Time) hours (71)',                                              71),
-    ('(Time) minutes (72)',                                            72),
-    ('(Time) seconds (73)',                                            73),
-    ('(Time) hundredths-seconds (158)',                                158),
-    ('(Time) milliseconds (159)',                                      159),
-    ('(Torque) newton-meters (160)',                                   160),
-    ('(Velocity) millimeters-per-second (161)',                        161),
-    ('(Velocity) millimeters-per-minute (162)',                        162),
-    ('(Velocity) meters-per-second (74)',                              74),
-    ('(Velocity) meters-per-minute (163)',                             163),
-    ('(Velocity) meters-per-hour (164)',                               164),
-    ('(Velocity) kilometers-per-hour (75)',                            75),
-    ('(Velocity) feet-per-second (76)',                                76),
-    ('(Velocity) feet-per-minute (77)',                                77),
-    ('(Velocity) miles-per-hour (78)',                                 78),
-    ('(Volume) cubic-feet (79)',                                       79),
-    ('(Volume) cubic-meters (80)',                                     80),
-    ('(Volume) imperial-gallons (81)',                                 81),
-    ('(Volume) milliliters (197)',                                     197),
-    ('(Volume) liters (82)',                                           82),
-    ('(Volume) us-gallons (83)',                                       83),
-    ('(Volumetric Flow) cubic-feet-per-second (142)',                  142),
-    ('(Volumetric Flow) cubic-feet-per-minute (84)',                   84),
+    ('(Acceleration) meters-per-second-per-second (166)', 166),
+    ('(Area) square-meters (0)', 0),
+    ('(Area) square-centimeters (116)', 116),
+    ('(Area) square-feet (1)', 1),
+    ('(Area) square-inches (115)', 115),
+    ('(Currency) currency1 (105)', 105),
+    ('(Currency) currency2 (106)', 106),
+    ('(Currency) currency3 (107)', 107),
+    ('(Currency) currency4 (108)', 108),
+    ('(Currency) currency5 (109)', 109),
+    ('(Currency) currency6 (110)', 110),
+    ('(Currency) currency7 (111)', 111),
+    ('(Currency) currency8 (112)', 112),
+    ('(Currency) currency9 (113)', 113),
+    ('(Currency) currency10 (114)', 114),
+    ('(Electrical) milliamperes (2)', 2),
+    ('(Electrical) amperes (3)', 3),
+    ('(Electrical) amperes-per-meter (167)', 167),
+    ('(Electrical) amperes-per-square-meter (168)', 168),
+    ('(Electrical) ampere-square-meters (169)', 169),
+    ('(Electrical) decibels (199)', 199),
+    ('(Electrical) decibels-millivolt (200)', 200),
+    ('(Electrical) decibels-volt (201)', 201),
+    ('(Electrical) farads (170)', 170),
+    ('(Electrical) henrys (171)', 171),
+    ('(Electrical) ohms (4)', 4),
+    ('(Electrical) ohm-meter-squared-per-meter (237)', 237),
+    ('(Electrical) ohm-meters (172)', 172),
+    ('(Electrical) milliohms (145)', 145),
+    ('(Electrical) kilohms (122)', 122),
+    ('(Electrical) megohms (123)', 123),
+    ('(Electrical) microsiemens (190)', 190),
+    ('(Electrical) millisiemens (202)', 202),
+    ('(Electrical) siemens (173)', 173),
+    ('(Electrical) siemens-per-meter (174)', 174),
+    ('(Electrical) teslas (175)', 175),
+    ('(Electrical) volts (5)', 5),
+    ('(Electrical) millivolts (124)', 124),
+    ('(Electrical) kilovolts (6)', 6),
+    ('(Electrical) megavolts (7)', 7),
+    ('(Electrical) volt-amperes (8)', 8),
+    ('(Electrical) kilovolt-amperes (9)', 9),
+    ('(Electrical) megavolt-amperes (10)', 10),
+    ('(Electrical) volt-amperes-reactive (11)', 11),
+    ('(Electrical) kilovolt-amperes-reactive (12)', 12),
+    ('(Electrical) megavolt-amperes-reactive (13)', 13),
+    ('(Electrical) volts-per-degree-kelvin (176)', 176),
+    ('(Electrical) volts-per-meter (177)', 177),
+    ('(Electrical) degrees-phase (14)', 14),
+    ('(Electrical) power-factor (15)', 15),
+    ('(Electrical) webers (178)', 178),
+    ('(Energy) ampere-seconds (238)', 238),
+    ('(Energy) volt-ampere-hours (239)', 239),
+    ('(Energy) kilovolt-ampere-hours (240)', 240),
+    ('(Energy) megavolt-ampere-hours (241)', 241),
+    ('(Energy) volt-ampere-hours-reactive (242)', 242),
+    ('(Energy) kilovolt-ampere-hours-reactive (243)', 243),
+    ('(Energy) megavolt-ampere-hours-reactive (244)', 244),
+    ('(Energy) volt-square-hours (245)', 245),
+    ('(Energy) ampere-square-hours (246)', 246),
+    ('(Energy) joules (16)', 16),
+    ('(Energy) kilojoules (17)', 17),
+    ('(Energy) kilojoules-per-kilogram (125)', 125),
+    ('(Energy) megajoules (126)', 126),
+    ('(Energy) watt-hours (18)', 18),
+    ('(Energy) kilowatt-hours (19)', 19),
+    ('(Energy) megawatt-hours (146)', 146),
+    ('(Energy) watt-hours-reactive (203)', 203),
+    ('(Energy) kilowatt-hours-reactive (204)', 204),
+    ('(Energy) megawatt-hours-reactive (205)', 205),
+    ('(Energy) btus (20)', 20),
+    ('(Energy) kilo-btus (147)', 147),
+    ('(Energy) mega-btus (148)', 148),
+    ('(Energy) therms (21)', 21),
+    ('(Energy) ton-hours (22)', 22),
+    ('(Enthalpy) joules-per-kilogram-dry-air (23)', 23),
+    ('(Enthalpy) kilojoules-per-kilogram-dry-air (149)', 149),
+    ('(Enthalpy) megajoules-per-kilogram-dry-air (150)', 150),
+    ('(Enthalpy) btus-per-pound-dry-air (24)', 24),
+    ('(Enthalpy) btus-per-pound (117)', 117),
+    ('(Entropy) joules-per-degree-kelvin (127)', 127),
+    ('(Entropy) kilojoules-per-degree-kelvin (151)', 151),
+    ('(Entropy) megajoules-per-degree-kelvin (152)', 152),
+    ('(Entropy) joules-per-kilogram-degree-kelvin (128)', 128),
+    ('(Force) newton (153)', 153),
+    ('(Frequency) cycles-per-hour (25)', 25),
+    ('(Frequency) cycles-per-minute (26)', 26),
+    ('(Frequency) hertz (27)', 27),
+    ('(Frequency) kilohertz (129)', 129),
+    ('(Frequency) megahertz (130)', 130),
+    ('(Frequency) per-hour (131)', 131),
+    ('(Humidity) grams-of-water-per-kilogram-dry-air (28)', 28),
+    ('(Humidity) percent-relative-humidity (29)', 29),
+    ('(Length) micrometers (194)', 194),
+    ('(Length) millimeters (30)', 30),
+    ('(Length) centimeters (118)', 118),
+    ('(Length) kilometers (193)', 193),
+    ('(Length) meters (31)', 31),
+    ('(Length) inches (32)', 32),
+    ('(Length) feet (33)', 33),
+    ('(Light) candelas (179)', 179),
+    ('(Light) candelas-per-square-meter (180)', 180),
+    ('(Light) watts-per-square-foot (34)', 34),
+    ('(Light) watts-per-square-meter (35)', 35),
+    ('(Light) lumens (36)', 36),
+    ('(Light) luxes (37)', 37),
+    ('(Light) foot-candles (38)', 38),
+    ('(Mass) milligrams (196)', 196),
+    ('(Mass) grams (195)', 195),
+    ('(Mass) kilograms (39)', 39),
+    ('(Mass) pounds-mass (40)', 40),
+    ('(Mass) tons (41)', 41),
+    ('(Mass Flow) grams-per-second (154)', 154),
+    ('(Mass Flow) grams-per-minute (155)', 155),
+    ('(Mass Flow) kilograms-per-second (42)', 42),
+    ('(Mass Flow) kilograms-per-minute (43)', 43),
+    ('(Mass Flow) kilograms-per-hour (44)', 44),
+    ('(Mass Flow) pounds-mass-per-second (119)', 119),
+    ('(Mass Flow) pounds-mass-per-minute (45)', 45),
+    ('(Mass Flow) pounds-mass-per-hour (46)', 46),
+    ('(Mass Flow) tons-per-hour (156)', 156),
+    ('(Power) milliwatts (132)', 132),
+    ('(Power) watts (47)', 47),
+    ('(Power) kilowatts (48)', 48),
+    ('(Power) megawatts (49)', 49),
+    ('(Power) btus-per-hour (50)', 50),
+    ('(Power) kilo-btus-per-hour (157)', 157),
+    ('(Power) joule-per-hours (247)', 247),
+    ('(Power) horsepower (51)', 51),
+    ('(Power) tons-refrigeration (52)', 52),
+    ('(Pressure) pascals (53)', 53),
+    ('(Pressure) hectopascals (133)', 133),
+    ('(Pressure) kilopascals (54)', 54),
+    ('(Pressure) millibars (134)', 134),
+    ('(Pressure) bars (55)', 55),
+    ('(Pressure) pounds-force-per-square-inch (56)', 56),
+    ('(Pressure) millimeters-of-water (206)', 206),
+    ('(Pressure) centimeters-of-water (57)', 57),
+    ('(Pressure) inches-of-water (58)', 58),
+    ('(Pressure) millimeters-of-mercury (59)', 59),
+    ('(Pressure) centimeters-of-mercury (60)', 60),
+    ('(Pressure) inches-of-mercury (61)', 61),
+    ('(Temperature) degrees-celsius (62)', 62),
+    ('(Temperature) degrees-kelvin (63)', 63),
+    ('(Temperature) degrees-kelvin-per-hour (181)', 181),
+    ('(Temperature) degrees-kelvin-per-minute (182)', 182),
+    ('(Temperature) degrees-fahrenheit (64)', 64),
+    ('(Temperature) degree-days-celsius (65)', 65),
+    ('(Temperature) degree-days-fahrenheit (66)', 66),
+    ('(Temperature) delta-degrees-fahrenheit (120)', 120),
+    ('(Temperature) delta-degrees-kelvin (121)', 121),
+    ('(Time) years (67)', 67),
+    ('(Time) months (68)', 68),
+    ('(Time) weeks (69)', 69),
+    ('(Time) days (70)', 70),
+    ('(Time) hours (71)', 71),
+    ('(Time) minutes (72)', 72),
+    ('(Time) seconds (73)', 73),
+    ('(Time) hundredths-seconds (158)', 158),
+    ('(Time) milliseconds (159)', 159),
+    ('(Torque) newton-meters (160)', 160),
+    ('(Velocity) millimeters-per-second (161)', 161),
+    ('(Velocity) millimeters-per-minute (162)', 162),
+    ('(Velocity) meters-per-second (74)', 74),
+    ('(Velocity) meters-per-minute (163)', 163),
+    ('(Velocity) meters-per-hour (164)', 164),
+    ('(Velocity) kilometers-per-hour (75)', 75),
+    ('(Velocity) feet-per-second (76)', 76),
+    ('(Velocity) feet-per-minute (77)', 77),
+    ('(Velocity) miles-per-hour (78)', 78),
+    ('(Volume) cubic-feet (79)', 79),
+    ('(Volume) cubic-meters (80)', 80),
+    ('(Volume) imperial-gallons (81)', 81),
+    ('(Volume) milliliters (197)', 197),
+    ('(Volume) liters (82)', 82),
+    ('(Volume) us-gallons (83)', 83),
+    ('(Volumetric Flow) cubic-feet-per-second (142)', 142),
+    ('(Volumetric Flow) cubic-feet-per-minute (84)', 84),
     ('(Volumetric Flow) million-standard-cubic-feet-per-minute (254)', 254),
-    ('(Volumetric Flow) cubic-feet-per-hour (191)',                    191),
-    ('(Volumetric Flow) cubic-feet-per-day (248)',                     248),
-    ('(Volumetric Flow) standard-cubic-feet-per-day (47808)',          47808),
-    ('(Volumetric Flow) million-standard-cubic-feet-per-day (47809)',  47809),
-    ('(Volumetric Flow) thousand-cubic-feet-per-day (47810)',          47810),
+    ('(Volumetric Flow) cubic-feet-per-hour (191)', 191),
+    ('(Volumetric Flow) cubic-feet-per-day (248)', 248),
+    ('(Volumetric Flow) standard-cubic-feet-per-day (47808)', 47808),
+    ('(Volumetric Flow) million-standard-cubic-feet-per-day (47809)', 47809),
+    ('(Volumetric Flow) thousand-cubic-feet-per-day (47810)', 47810),
     ('(Volumetric Flow) thousand-standard-cubic-feet-per-day (47811)', 47811),
-    ('(Volumetric Flow) pounds-mass-per-day (47812)',                  47812),
-    ('(Volumetric Flow) cubic-meters-per-second (85)',                 85),
-    ('(Volumetric Flow) cubic-meters-per-minute (165)',                165),
-    ('(Volumetric Flow) cubic-meters-per-hour (135)',                  135),
-    ('(Volumetric Flow) cubic-meters-per-day (249)',                   249),
-    ('(Volumetric Flow) imperial-gallons-per-minute (86)',             86),
-    ('(Volumetric Flow) milliliters-per-second (198)',                 198),
-    ('(Volumetric Flow) liters-per-second (87)',                       87),
-    ('(Volumetric Flow) liters-per-minute (88)',                       88),
-    ('(Volumetric Flow) liters-per-hour (136)',                        136),
-    ('(Volumetric Flow) us-gallons-per-minute (89)',                   89),
-    ('(Volumetric Flow) us-gallons-per-hour (192)',                    192),
-    ('(Other) degrees-angular (90)',                                   90),
-    ('(Other) degrees-celsius-per-hour (91)',                          91),
-    ('(Other) degrees-celsius-per-minute (92)',                        92),
-    ('(Other) degrees-fahrenheit-per-hour (93)',                       93),
-    ('(Other) degrees-fahrenheit-per-minute (94)',                     94),
-    ('(Other) joule-seconds (183)',                                    183),
-    ('(Other) kilograms-per-cubic-meter (186)',                        186),
-    ('(Other) kilowatt-hours-per-square-meter (137)',                  137),
-    ('(Other) kilowatt-hours-per-square-foot (138)',                   138),
-    ('(Other) watt-hours-per-cubic-meter (250)',                       250),
-    ('(Other) joules-per-cubic-meter (251)',                           251),
-    ('(Other) megajoules-per-square-meter (139)',                      139),
-    ('(Other) megajoules-per-square-foot (140)',                       140),
-    ('(Other) mole-percent (252)',                                     252),
-    ('(Other) no-units (95)',                                          95),
-    ('(Other) newton-seconds (187)',                                   187),
-    ('(Other) newtons-per-meter (188)',                                188),
-    ('(Other) parts-per-million (96)',                                 96),
-    ('(Other) parts-per-billion (97)',                                 97),
-    ('(Other) pascal-seconds (253)',                                   253),
-    ('(Other) percent (98)',                                           98),
-    ('(Other) percent-obscuration-per-foot (143)',                     143),
-    ('(Other) percent-obscuration-per-meter (144)',                    144),
-    ('(Other) percent-per-second (99)',                                99),
-    ('(Other) per-minute (100)',                                       100),
-    ('(Other) per-second (101)',                                       101),
-    ('(Other) psi-per-degree-fahrenheit (102)',                        102),
-    ('(Other) radians (103)',                                          103),
-    ('(Other) radians-per-second (184)',                               184),
-    ('(Other) revolutions-per-minute (104)',                           104),
-    ('(Other) square-meters-per-newton (185)',                         185),
-    ('(Other) watts-per-meter-per-degree-kelvin (189)',                189),
-    ('(Other) watts-per-square-meter-degree-kelvin (141)',             141),
-    ('(Other) per-mille (207)',                                        207),
-    ('(Other) grams-per-gram (208)',                                   208),
-    ('(Other) kilograms-per-kilogram (209)',                           209),
-    ('(Other) grams-per-kilogram (210)',                               210),
-    ('(Other) milligrams-per-gram (211)',                              211),
-    ('(Other) milligrams-per-kilogram (212)',                          212),
-    ('(Other) grams-per-milliliter (213)',                             213),
-    ('(Other) grams-per-liter (214)',                                  214),
-    ('(Other) milligrams-per-liter (215)',                             215),
-    ('(Other) micrograms-per-liter (216)',                             216),
-    ('(Other) grams-per-cubic-meter (217)',                            217),
-    ('(Other) milligrams-per-cubic-meter (218)',                       218),
-    ('(Other) micrograms-per-cubic-meter (219)',                       219),
-    ('(Other) nanograms-per-cubic-meter (220)',                        220),
-    ('(Other) grams-per-cubic-centimeter (221)',                       221),
-    ('(Other) becquerels (222)',                                       222),
-    ('(Other) kilobecquerels (223)',                                   223),
-    ('(Other) megabecquerels (224)',                                   224),
-    ('(Other) gray (225)',                                             225),
-    ('(Other) milligray (226)',                                        226),
-    ('(Other) microgray (227)',                                        227),
-    ('(Other) sieverts (228)',                                         228),
-    ('(Other) millisieverts (229)',                                    229),
-    ('(Other) microsieverts (230)',                                    230),
-    ('(Other) microsieverts-per-hour (231)',                           231),
-    ('(Other) millirems (47814)',                                      47814),
-    ('(Other) millirems-per-hour (47815)',                             47815),
-    ('(Other) decibels-a (232)',                                       232),
-    ('(Other) nephelometric-turbidity-unit (233)',                     233),
-    ('(Other) pH (234)',                                               234),
-    ('(Other) grams-per-square-meter (235)',                           235),
-    ('(Other) minutes-per-degree-kelvin (236)',                        236)
+    ('(Volumetric Flow) pounds-mass-per-day (47812)', 47812),
+    ('(Volumetric Flow) cubic-meters-per-second (85)', 85),
+    ('(Volumetric Flow) cubic-meters-per-minute (165)', 165),
+    ('(Volumetric Flow) cubic-meters-per-hour (135)', 135),
+    ('(Volumetric Flow) cubic-meters-per-day (249)', 249),
+    ('(Volumetric Flow) imperial-gallons-per-minute (86)', 86),
+    ('(Volumetric Flow) milliliters-per-second (198)', 198),
+    ('(Volumetric Flow) liters-per-second (87)', 87),
+    ('(Volumetric Flow) liters-per-minute (88)', 88),
+    ('(Volumetric Flow) liters-per-hour (136)', 136),
+    ('(Volumetric Flow) us-gallons-per-minute (89)', 89),
+    ('(Volumetric Flow) us-gallons-per-hour (192)', 192),
+    ('(Other) degrees-angular (90)', 90),
+    ('(Other) degrees-celsius-per-hour (91)', 91),
+    ('(Other) degrees-celsius-per-minute (92)', 92),
+    ('(Other) degrees-fahrenheit-per-hour (93)', 93),
+    ('(Other) degrees-fahrenheit-per-minute (94)', 94),
+    ('(Other) joule-seconds (183)', 183),
+    ('(Other) kilograms-per-cubic-meter (186)', 186),
+    ('(Other) kilowatt-hours-per-square-meter (137)', 137),
+    ('(Other) kilowatt-hours-per-square-foot (138)', 138),
+    ('(Other) watt-hours-per-cubic-meter (250)', 250),
+    ('(Other) joules-per-cubic-meter (251)', 251),
+    ('(Other) megajoules-per-square-meter (139)', 139),
+    ('(Other) megajoules-per-square-foot (140)', 140),
+    ('(Other) mole-percent (252)', 252),
+    ('(Other) no-units (95)', 95),
+    ('(Other) newton-seconds (187)', 187),
+    ('(Other) newtons-per-meter (188)', 188),
+    ('(Other) parts-per-million (96)', 96),
+    ('(Other) parts-per-billion (97)', 97),
+    ('(Other) pascal-seconds (253)', 253),
+    ('(Other) percent (98)', 98),
+    ('(Other) percent-obscuration-per-foot (143)', 143),
+    ('(Other) percent-obscuration-per-meter (144)', 144),
+    ('(Other) percent-per-second (99)', 99),
+    ('(Other) per-minute (100)', 100),
+    ('(Other) per-second (101)', 101),
+    ('(Other) psi-per-degree-fahrenheit (102)', 102),
+    ('(Other) radians (103)', 103),
+    ('(Other) radians-per-second (184)', 184),
+    ('(Other) revolutions-per-minute (104)', 104),
+    ('(Other) square-meters-per-newton (185)', 185),
+    ('(Other) watts-per-meter-per-degree-kelvin (189)', 189),
+    ('(Other) watts-per-square-meter-degree-kelvin (141)', 141),
+    ('(Other) per-mille (207)', 207),
+    ('(Other) grams-per-gram (208)', 208),
+    ('(Other) kilograms-per-kilogram (209)', 209),
+    ('(Other) grams-per-kilogram (210)', 210),
+    ('(Other) milligrams-per-gram (211)', 211),
+    ('(Other) milligrams-per-kilogram (212)', 212),
+    ('(Other) grams-per-milliliter (213)', 213),
+    ('(Other) grams-per-liter (214)', 214),
+    ('(Other) milligrams-per-liter (215)', 215),
+    ('(Other) micrograms-per-liter (216)', 216),
+    ('(Other) grams-per-cubic-meter (217)', 217),
+    ('(Other) milligrams-per-cubic-meter (218)', 218),
+    ('(Other) micrograms-per-cubic-meter (219)', 219),
+    ('(Other) nanograms-per-cubic-meter (220)', 220),
+    ('(Other) grams-per-cubic-centimeter (221)', 221),
+    ('(Other) becquerels (222)', 222),
+    ('(Other) kilobecquerels (223)', 223),
+    ('(Other) megabecquerels (224)', 224),
+    ('(Other) gray (225)', 225),
+    ('(Other) milligray (226)', 226),
+    ('(Other) microgray (227)', 227),
+    ('(Other) sieverts (228)', 228),
+    ('(Other) millisieverts (229)', 229),
+    ('(Other) microsieverts (230)', 230),
+    ('(Other) microsieverts-per-hour (231)', 231),
+    ('(Other) millirems (47814)', 47814),
+    ('(Other) millirems-per-hour (47815)', 47815),
+    ('(Other) decibels-a (232)', 232),
+    ('(Other) nephelometric-turbidity-unit (233)', 233),
+    ('(Other) pH (234)', 234),
+    ('(Other) grams-per-square-meter (235)', 235),
+    ('(Other) minutes-per-degree-kelvin (236)', 236)
 ]  # BACnetEngineeringUnits
-
 
 # ObjectID (22 bits ID + 10 bits type) => max = 2^22-1 = 4194303
 #  However, ObjectID 4194303 is not allowed!
@@ -446,7 +444,7 @@ class AVObject(AnalogObject):
                      "Description": "",
                      "Engineering Units": '(Other) no-units (95)',
                      # internal plugin parameters...
-                     "Unit ID": 95,   # the ID of the engineering unit
+                     "Unit ID": 95,  # the ID of the engineering unit
                      # will get updated by
                      # UpdateVirtualProperties()
                      "BACnetObjTypeID": 2,
@@ -460,7 +458,7 @@ class AOObject(AnalogObject):
                      "Description": "",
                      "Engineering Units": '(Other) no-units (95)',
                      # internal plugin parameters...
-                     "Unit ID": 95,   # the ID of the engineering unit
+                     "Unit ID": 95,  # the ID of the engineering unit
                      # will get updated by
                      # UpdateVirtualProperties()
                      "BACnetObjTypeID": 1,
@@ -474,7 +472,7 @@ class AIObject(AnalogObject):
                      "Description": "",
                      "Engineering Units": '(Other) no-units (95)',
                      # internal plugin parameters...
-                     "Unit ID": 95,   # the ID of the engineering unit
+                     "Unit ID": 95,  # the ID of the engineering unit
                      # will get updated by
                      # UpdateVirtualProperties()
                      "BACnetObjTypeID": 0,
@@ -516,7 +514,7 @@ class MSIObject(MultiSObject):
 
 
 class ObjectTable(CustomTable):
-    #  A custom wx.grid.PyGridTableBase using user supplied data
+    #  A custom wx.grid.GridTableBase using user supplied data
     #
     #  This will basically store a list of BACnet objects that the slave will support/implement.
     #  There will be one instance of this ObjectTable class for each BACnet object type
@@ -558,14 +556,14 @@ class ObjectTable(CustomTable):
         self.ChangesToSave = False
 
     # def _GetRowEdit(self, row):
-        # row_edit = self.GetValueByName(row, "Edit")
-        # var_type = self.Parent.GetTagName()
-        # bodytype = self.Parent.Controler.GetEditedElementBodyType(var_type)
-        # if bodytype in ["ST", "IL"]:
-        #     row_edit = True;
-        # return row_edit
+    # row_edit = self.GetValueByName(row, "Edit")
+    # var_type = self.Parent.GetTagName()
+    # bodytype = self.Parent.Controler.GetEditedElementBodyType(var_type)
+    # if bodytype in ["ST", "IL"]:
+    #     row_edit = True;
+    # return row_edit
 
-    def _updateColAttrs(self, grid):
+    def _updateColAttrs(self, grid, row=None):
         #  wx.grid.Grid -> update the column attributes to add the
         #  appropriate renderer given the column name.
         #
@@ -576,13 +574,17 @@ class ObjectTable(CustomTable):
                 PropertyName = self.BACnetObjectType.PropertyNames[col]
                 PropertyConfig = self.BACnetObjectType.PropertyConfig[PropertyName]
                 grid.SetReadOnly(row, col, False)
-                grid.SetCellEditor(row, col, PropertyConfig["GridCellEditor"]())
+                ctrl=PropertyConfig["GridCellEditor"]
+                if ctrl==wx.grid.GridCellChoiceEditor:
+                    editor = ctrl(PropertyConfig["GridCellEditorParam"].split(','))
+                else:
+                    editor = ctrl()
+                grid.SetCellEditor(row, col, editor)
                 grid.SetCellRenderer(row, col, PropertyConfig["GridCellRenderer"]())
                 grid.SetCellBackgroundColour(row, col, wx.WHITE)
                 grid.SetCellTextColour(row, col, wx.BLACK)
                 if "GridCellEditorParam" in PropertyConfig:
-                    grid.GetCellEditor(row, col).SetParameters(
-                        PropertyConfig["GridCellEditorParam"])
+                    editor.SetParameters(PropertyConfig["GridCellEditorParam"])
             self.ResizeRow(grid, row)
 
     def FindValueByName(self, PropertyName, PropertyValue):
@@ -714,8 +716,8 @@ class ObjectGrid(CustomGrid):
                 # More than 1 BACnet object using this ID! Let us Highlight this row with errors...
                 # TODO: change the hardcoded column number '0' to a number obtained at runtime
                 #       that is guaranteed to match the column titled "Object Identifier"
-                self.SetCellBackgroundColour(row, 0, ERROR_HIGHLIGHT[0])
-                self.SetCellTextColour(row, 0, ERROR_HIGHLIGHT[1])
+                self.SetCellBackgroundColour(row, 0, wx.Colour(255, 255, 0))
+                self.SetCellTextColour(row, 0, wx.RED)
             else:
                 self.SetCellBackgroundColour(row, 0, wx.WHITE)
                 self.SetCellTextColour(row, 0, wx.BLACK)
@@ -808,15 +810,15 @@ class ObjectEditor(wx.Panel):
             wx.StaticText(self, label=_('Object Properties:')), flag=wx.ALIGN_BOTTOM)
         controls_sizer.AddStretchSpacer()
         for name, bitmap, help in [
-                ("AddButton", "add_element", _("Add variable")),
-                ("DeleteButton", "remove_element", _("Remove variable")),
-                ("UpButton", "up", _("Move variable up")),
-                ("DownButton", "down", _("Move variable down"))]:
+            ("AddButton", "add_element", _("Add variable")),
+            ("DeleteButton", "remove_element", _("Remove variable")),
+            ("UpButton", "up", _("Move variable up")),
+            ("DownButton", "down", _("Move variable down"))]:
             button = wx.lib.buttons.GenBitmapButton(
                 self, bitmap=GetBitmap(bitmap),
                 size=wx.Size(28, 28),
                 style=wx.NO_BORDER)
-            button.SetToolTipString(help)
+            button.SetToolTip(help)
             setattr(self, name, button)
             controls_sizer.Add(button)
 
@@ -826,7 +828,7 @@ class ObjectEditor(wx.Panel):
         # use only to enable drag'n'drop
         # self.VariablesGrid.SetDropTarget(VariableDropTarget(self))
         self.VariablesGrid.Bind(
-            wx.grid.EVT_GRID_CELL_CHANGE,     self.OnVariablesGridCellChange)
+            wx.grid.EVT_GRID_CELL_CHANGED, self.OnVariablesGridCellChange)
         # self.VariablesGrid.Bind(wx.grid.EVT_GRID_CELL_LEFT_CLICK, self.OnVariablesGridCellLeftClick)
         # self.VariablesGrid.Bind(wx.grid.EVT_GRID_EDITOR_SHOWN,    self.OnVariablesGridEditorShown)
         self.MainSizer.Add(self.VariablesGrid, flag=wx.GROW)
@@ -834,10 +836,10 @@ class ObjectEditor(wx.Panel):
         # Configure the Variables Grid...
         # do not include a leftmost column containing the 'row label'
         self.VariablesGrid.SetRowLabelSize(0)
-        self.VariablesGrid.SetButtons({"Add":    self.AddButton,
+        self.VariablesGrid.SetButtons({"Add": self.AddButton,
                                        "Delete": self.DeleteButton,
-                                       "Up":     self.UpButton,
-                                       "Down":   self.DownButton})
+                                       "Up": self.UpButton,
+                                       "Down": self.DownButton})
         # The custom grid needs to know the default values to use when 'AddButton' creates a new row
         # NOTE: ObjTable.BACnetObjectType will contain the class name of one of the following classes
         # (BVObject, BIObject, BOObject, AVObject, AIObject, AOObject, MSVObject, MSIObject, MSOObject)
@@ -863,7 +865,7 @@ class ObjectEditor(wx.Panel):
             self.VariablesGrid.AutoSizeColumn(col, False)
 
         # layout the items in all sizers, and show them too.
-        self.SetSizer(self.MainSizer)    # Have the wondow 'own' the sizer...
+        self.SetSizer(self.MainSizer)  # Have the wondow 'own' the sizer...
         # self.MainSizer.ShowItems(True)  # not needed once the window 'owns' the sizer (SetSizer())
         # self.MainSizer.Layout()         # not needed once the window 'owns' the sizer (SetSizer())
 
@@ -930,13 +932,13 @@ class BacnetSlaveEditorPlug(ConfTreeNodeEditor):
     #                    In our case, the object of class _BacnetSlavePlug
 
     CONFNODEEDITOR_TABS = [
-        (_("Analog Value Objects"),       "_create_AV_ObjectEditor"),
-        (_("Analog Output Objects"),      "_create_AO_ObjectEditor"),
-        (_("Analog Input Objects"),       "_create_AI_ObjectEditor"),
-        (_("Binary Value Objects"),       "_create_BV_ObjectEditor"),
-        (_("Binary Output Objects"),      "_create_BO_ObjectEditor"),
-        (_("Binary Input Objects"),       "_create_BI_ObjectEditor"),
-        (_("Multi-State Value Objects"),  "_create_MSV_ObjectEditor"),
+        (_("Analog Value Objects"), "_create_AV_ObjectEditor"),
+        (_("Analog Output Objects"), "_create_AO_ObjectEditor"),
+        (_("Analog Input Objects"), "_create_AI_ObjectEditor"),
+        (_("Binary Value Objects"), "_create_BV_ObjectEditor"),
+        (_("Binary Output Objects"), "_create_BO_ObjectEditor"),
+        (_("Binary Input Objects"), "_create_BI_ObjectEditor"),
+        (_("Multi-State Value Objects"), "_create_MSV_ObjectEditor"),
         (_("Multi-State Output Objects"), "_create_MSO_ObjectEditor"),
         (_("Multi-State Input Objects"), "_create_MSI_ObjectEditor")]
 
@@ -1001,24 +1003,24 @@ class BacnetSlaveEditorPlug(ConfTreeNodeEditor):
     def RefreshView(self):
         self.HighlightAllDuplicateObjectNames()
         ConfTreeNodeEditor.RefreshView(self)
-        self. AV_ObjectEditor.RefreshView()
-        self. AO_ObjectEditor.RefreshView()
-        self. AI_ObjectEditor.RefreshView()
-        self. BV_ObjectEditor.RefreshView()
-        self. BO_ObjectEditor.RefreshView()
-        self. BI_ObjectEditor.RefreshView()
+        self.AV_ObjectEditor.RefreshView()
+        self.AO_ObjectEditor.RefreshView()
+        self.AI_ObjectEditor.RefreshView()
+        self.BV_ObjectEditor.RefreshView()
+        self.BO_ObjectEditor.RefreshView()
+        self.BI_ObjectEditor.RefreshView()
         self.MSV_ObjectEditor.RefreshView()
         self.MSO_ObjectEditor.RefreshView()
         self.MSI_ObjectEditor.RefreshView()
 
     def HighlightAllDuplicateObjectNames(self):
         ObjectNamesCount = self.Controler.GetObjectNamesCount()
-        self. AV_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
-        self. AO_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
-        self. AI_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
-        self. BV_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
-        self. BO_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
-        self. BI_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
+        self.AV_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
+        self.AO_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
+        self.AI_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
+        self.BV_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
+        self.BO_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
+        self.BI_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
         self.MSV_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
         self.MSO_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)
         self.MSI_ObjectEditor.HighlightDuplicateObjectNames(ObjectNamesCount)

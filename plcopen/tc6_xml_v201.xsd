@@ -35,8 +35,12 @@
 												<xsd:sequence>
 													<xsd:element name="scaling">
 														<xsd:complexType>
-															<xsd:attribute name="x" type="xsd:decimal" use="required"/>
-															<xsd:attribute name="y" type="xsd:decimal" use="required"/>
+															<xsd:attribute name="x" type="xsd:decimal" use="optional"
+																		   default="10"/>
+															<xsd:attribute name="y" type="xsd:decimal" use="optional"
+																		   default="10"/>
+															<xsd:attribute name="showDoc" type="xsd:boolean"
+																		   use="optional" default="1"/>
 														</xsd:complexType>
 													</xsd:element>
 												</xsd:sequence>
@@ -47,8 +51,12 @@
 												<xsd:sequence>
 													<xsd:element name="scaling">
 														<xsd:complexType>
-															<xsd:attribute name="x" type="xsd:decimal" use="required"/>
-															<xsd:attribute name="y" type="xsd:decimal" use="required"/>
+															<xsd:attribute name="x" type="xsd:decimal" use="optional"
+																		   default="10"/>
+															<xsd:attribute name="y" type="xsd:decimal" use="optional"
+																		   default="10"/>
+															<xsd:attribute name="showDoc" type="xsd:boolean"
+																		   use="optional" default="1"/>
 														</xsd:complexType>
 													</xsd:element>
 												</xsd:sequence>
@@ -59,8 +67,12 @@
 												<xsd:sequence>
 													<xsd:element name="scaling">
 														<xsd:complexType>
-															<xsd:attribute name="x" type="xsd:decimal" use="required"/>
-															<xsd:attribute name="y" type="xsd:decimal" use="required"/>
+															<xsd:attribute name="x" type="xsd:decimal" use="optional"
+																		   default="10"/>
+															<xsd:attribute name="y" type="xsd:decimal" use="optional"
+																		   default="10"/>
+															<xsd:attribute name="showDoc" type="xsd:boolean"
+																		   use="optional" default="1"/>
 														</xsd:complexType>
 													</xsd:element>
 												</xsd:sequence>

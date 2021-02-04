@@ -27,7 +27,6 @@
 ../dialogs/BrowseValuesLibraryDialog.py
 ../dialogs/ActionBlockDialog.py
 ../dialogs/PouActionDialog.py
-../dialogs/DiscoveryDialog.py
 ../dialogs/PouDialog.py
 ../graphics/RubberBand.py
 ../graphics/FBD_Objects.py
@@ -43,10 +42,8 @@
 ../bacnet/ede_files/template_EDE.csv
 ../bacnet/ede_files/template_StateTexts.csv
 ../connectors/PYRO/__init__.py
-../connectors/PYRO/dialog.py
 ../connectors/__init__.py
 ../connectors/WAMP/__init__.py
-../connectors/WAMP/dialog.py
 ../targets/Generic/XSD
 ../targets/XSD_toolchain_makefile
 ../targets/Xenomai/__init__.py
@@ -97,7 +94,6 @@
 ../controls/CustomTable.py
 ../controls/EnhancedStatusBar.py
 ../controls/LibraryPanel.py
-../controls/UriLocationEditor.py
 ../controls/CustomToolTip.py
 ../controls/LogViewer.py
 ../controls/FolderTree.py
@@ -122,7 +118,6 @@
 ../xmlclass/xsdschema.py
 ../xmlclass/xmlclass.py
 ../Beremiz.py
-../version.py
 ../POULibrary.py
 ../util/MiniTextControler.py
 ../util/ExceptionHandler.py

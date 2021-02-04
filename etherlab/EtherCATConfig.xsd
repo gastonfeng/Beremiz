@@ -23,12 +23,12 @@
 															<xs:documentation>name of the master</xs:documentation>
 														</xs:annotation>
 													</xs:element>
-													<xs:element name="Destination" type="xs:hexBinary">
+													<xs:element name="Destination" type="xs:string">
 														<xs:annotation>
 															<xs:documentation>destination MAC address</xs:documentation>
 														</xs:annotation>
 													</xs:element>
-													<xs:element name="Source" type="xs:hexBinary">
+													<xs:element name="Source" type="xs:string">
 														<xs:annotation>
 															<xs:documentation>source MAC address</xs:documentation>
 														</xs:annotation>

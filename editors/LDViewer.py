@@ -23,12 +23,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
-from __future__ import division
-from future.builtins import round
-
-import wx
-from six.moves import xrange
 
 from editors.Viewer import *
 
@@ -189,8 +183,8 @@ class LD_Viewer(Viewer):
         self.RungComments = []
         Viewer.ResetView(self)
 
-    def RefreshView(self, variablepanel=True, selection=None):
-        Viewer.RefreshView(self, variablepanel, selection)
+    def RefreshView(self, variablepanel=True, selection=None, reload=False):
+        Viewer.RefreshView(self, variablepanel, selection, reload)
         if self.GetDrawingMode() != FREEDRAWING_MODE:
             for i, rung in enumerate(self.Rungs):
                 bbox = rung.GetBoundingBox()
@@ -275,15 +269,18 @@ class LD_Viewer(Viewer):
     def FindElement(self, event, exclude_group=False, connectors=True):
         if self.GetDrawingMode() == FREEDRAWING_MODE:
             return Viewer.FindElement(self, event, exclude_group, connectors)
-
         dc = self.GetLogicalDC()
-        pos = event.GetLogicalPosition(dc)
+        scalex, scaley = dc.GetUserScale()
+        posL = event.GetLogicalPosition(dc)
+        pos = event.GetPosition()
+        pt = wx.Point(*self.CalcUnscrolledPosition(pos.x, pos.y))
         if self.SelectedElement and not isinstance(self.SelectedElement, (Graphic_Group, Wire)):
-            if self.SelectedElement.HitTest(pos, connectors) or self.SelectedElement.TestHandle(pos) != (0, 0):
+            if self.SelectedElement.HitTest(posL, connectors) or self.SelectedElement.TestHandle(posL, scalex, scaley,
+                                                                                                 pt) != (0, 0):
                 return self.SelectedElement
         elements = []
         for element in self.GetElements(sort_wires=True):
-            if element.HitTest(pos, connectors) or element.TestHandle(event) != (0, 0):
+            if element.HitTest(posL, connectors) or element.TestHandle(event, scalex, scaley, pt) != (0, 0):
                 elements.append(element)
         if len(elements) == 1:
             return elements[0]
@@ -301,7 +298,7 @@ class LD_Viewer(Viewer):
             return Viewer.SearchElements(self, bbox)
 
         elements = []
-        for element in self.Blocks.values() + self.Comments.values():
+        for element in list(self.Blocks.values()) + list(self.Comments.values()):
             if element.IsInSelection(bbox):
                 elements.append(element)
         return elements
@@ -458,10 +455,10 @@ class LD_Viewer(Viewer):
                 contact = LD_Contact(self, CONTACT_NORMAL, var_name, id)
                 width, height = contact.GetMinSize()
                 if scaling is not None:
-                    x = round(x / scaling[0]) * scaling[0]
-                    y = round(y / scaling[1]) * scaling[1]
-                    width = round(width / scaling[0] + 0.5) * scaling[0]
-                    height = round(height / scaling[1] + 0.5) * scaling[1]
+                    x = round(float(x) / float(scaling[0])) * scaling[0]
+                    y = round(float(y) / float(scaling[1])) * scaling[1]
+                    width = round(float(width) / float(scaling[0]) + 0.5) * scaling[0]
+                    height = round(float(height) / float(scaling[1]) + 0.5) * scaling[1]
                 contact.SetPosition(x, y)
                 contact.SetSize(width, height)
                 self.AddBlock(contact)
@@ -471,10 +468,10 @@ class LD_Viewer(Viewer):
                 coil = LD_Coil(self, COIL_NORMAL, var_name, id)
                 width, height = coil.GetMinSize()
                 if scaling is not None:
-                    x = round(x / scaling[0]) * scaling[0]
-                    y = round(y / scaling[1]) * scaling[1]
-                    width = round(width / scaling[0] + 0.5) * scaling[0]
-                    height = round(height / scaling[1] + 0.5) * scaling[1]
+                    x = round(float(x) / float(scaling[0])) * scaling[0]
+                    y = round(float(y) / float(scaling[1])) * scaling[1]
+                    width = round(float(width) / float(scaling[0]) + 0.5) * scaling[0]
+                    height = round(float(height) / float(scaling[1]) + 0.5) * scaling[1]
                 coil.SetPosition(x, y)
                 coil.SetSize(width, height)
                 self.AddBlock(coil)
@@ -678,7 +675,7 @@ class LD_Viewer(Viewer):
         else:
             message = wx.MessageDialog(self, _("You must select the wire where a contact should be added!"), _("Error"), wx.OK | wx.ICON_ERROR)
             message.ShowModal()
-            message.Destroy()
+            # message.Destroy()
 
     def AddLadderBranch(self):
         blocks = []
@@ -894,16 +891,16 @@ class LD_Viewer(Viewer):
             else:
                 message = wx.MessageDialog(self, _("The group of block must be coherent!"), _("Error"), wx.OK | wx.ICON_ERROR)
                 message.ShowModal()
-                message.Destroy()
+                # message.Destroy()
         else:
             message = wx.MessageDialog(self, _("You must select the block or group of blocks around which a branch should be added!"), _("Error"), wx.OK | wx.ICON_ERROR)
             message.ShowModal()
-            message.Destroy()
+            # message.Destroy()
 
     def AddLadderBlock(self):
         message = wx.MessageDialog(self, _("This option isn't available yet!"), _("Warning"), wx.OK | wx.ICON_EXCLAMATION)
         message.ShowModal()
-        message.Destroy()
+        # message.Destroy()
 
     # -------------------------------------------------------------------------------
     #                          Delete element functions
@@ -1190,7 +1187,7 @@ class LD_Viewer(Viewer):
 
     def RefreshRungs(self, movey, fromidx):
         if movey != 0:
-            for i in xrange(fromidx, len(self.Rungs)):
+            for i in range(fromidx, len(self.Rungs)):
                 self.RungComments[i].Move(0, movey)
                 self.RungComments[i].RefreshModel()
                 self.Rungs[i].Move(0, movey)

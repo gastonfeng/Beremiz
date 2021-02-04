@@ -23,9 +23,10 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
 import wx
 import wx.grid
+
+from plcopen.VariableInfoCollector import _VariableInfos
 
 if wx.Platform == '__WXMSW__':
     ROW_HEIGHT = 20
@@ -33,14 +34,14 @@ else:
     ROW_HEIGHT = 28
 
 
-class CustomTable(wx.grid.PyGridTableBase):
-
+class CustomTable(wx.grid.GridTableBase):
     """
     A custom wx.grid.Grid Table using user supplied data
     """
+
     def __init__(self, parent, data, colnames):
         # The base class must be initialized *first*
-        wx.grid.PyGridTableBase.__init__(self)
+        wx.grid.GridTableBase.__init__(self)
         self.data = data
         self.colnames = colnames
         self.Highlights = {}
@@ -51,6 +52,8 @@ class CustomTable(wx.grid.PyGridTableBase):
         self._rows = self.GetNumberRows()
         self._cols = self.GetNumberCols()
 
+    def __del__(self):
+        pass
     def GetNumberCols(self):
         return len(self.colnames)
 
@@ -63,8 +66,8 @@ class CustomTable(wx.grid.PyGridTableBase):
                 return _(self.colnames[col])
             return self.colnames[col]
 
-    def GetRowLabelValue(self, row, translate=True):
-        return row
+    #    def GetRowLabelValue(self, row, translate=True):
+    #        return row
 
     def GetValue(self, row, col):
         if row < self.GetNumberRows():
@@ -82,7 +85,7 @@ class CustomTable(wx.grid.PyGridTableBase):
         if row < self.GetNumberRows():
             self.data[row][colname] = value
 
-    def ResetView(self, grid):
+    def ResetView(self, grid, row=None):
         """
         (wx.grid.Grid) -> Reset the grid view.   Call this to
         update the grid if rows and columns have been added or deleted
@@ -90,24 +93,24 @@ class CustomTable(wx.grid.PyGridTableBase):
         grid.CloseEditControl()
         grid.BeginBatch()
         for current, new, delmsg, addmsg in [
-                (
+            (
                     self._rows,
                     self.GetNumberRows(),
                     wx.grid.GRIDTABLE_NOTIFY_ROWS_DELETED,
                     wx.grid.GRIDTABLE_NOTIFY_ROWS_APPENDED
-                ),
-                (
+            ),
+            (
                     self._cols,
                     self.GetNumberCols(),
                     wx.grid.GRIDTABLE_NOTIFY_COLS_DELETED,
                     wx.grid.GRIDTABLE_NOTIFY_COLS_APPENDED
-                ),
+            ),
         ]:
             if new < current:
-                msg = wx.grid.GridTableMessage(self, delmsg, new, current-new)
+                msg = wx.grid.GridTableMessage(self, delmsg, new, current - new)
                 grid.ProcessTableMessage(msg)
             elif new > current:
-                msg = wx.grid.GridTableMessage(self, addmsg, new-current)
+                msg = wx.grid.GridTableMessage(self, addmsg, new - current)
                 grid.ProcessTableMessage(msg)
                 self.UpdateValues(grid)
         grid.EndBatch()
@@ -115,7 +118,7 @@ class CustomTable(wx.grid.PyGridTableBase):
         self._rows = self.GetNumberRows()
         self._cols = self.GetNumberCols()
         # update the column rendering scheme
-        self._updateColAttrs(grid)
+        self._updateColAttrs(grid, row)
 
         # update the scrollbars and the displayed part of the grid
         grid.AdjustScrollbars()
@@ -127,7 +130,7 @@ class CustomTable(wx.grid.PyGridTableBase):
         msg = wx.grid.GridTableMessage(self, wx.grid.GRIDTABLE_REQUEST_VIEW_GET_VALUES)
         grid.ProcessTableMessage(msg)
 
-    def _updateColAttrs(self, grid):
+    def _updateColAttrs(self, grid, row=None):
         """
         wx.grid.Grid -> update the column attributes to add the
         appropriate renderer given the column name.
@@ -186,28 +189,78 @@ class CustomTable(wx.grid.PyGridTableBase):
     def Empty(self):
         self.data = []
 
-    def AddHighlight(self, infos, highlight_type):
+    def AddHighlight(self, grid,infos, highlight_type):
         row_highlights = self.Highlights.setdefault(infos[0], {})
         col_highlights = row_highlights.setdefault(infos[1], [])
         col_highlights.append(highlight_type)
+        for row in self.Highlights.keys():
+            row_highlights = self.Highlights.get(row, {})
+            for col in range(self.GetNumberCols()):
+                colname = self.GetColLabelValue(col, False)
 
-    def RemoveHighlight(self, infos, highlight_type):
+                # grid.SetReadOnly(row, col, True)
+                # grid.SetCellEditor(row, col, None)
+                # grid.SetCellRenderer(row, col, None)
+
+                highlight_colours = row_highlights.get(colname.lower(), [(wx.WHITE, wx.BLACK)])[-1]
+                grid.SetCellBackgroundColour(row, col, highlight_colours[0])
+                grid.SetCellTextColour(row, col, highlight_colours[1])
+            self.ResizeRow(grid, row)
+        grid.ForceRefresh()
+
+    def RemoveHighlight(self,grid, infos, highlight_type):
+        row=infos[0]
+        for col in range(self.GetNumberCols()):
+            # grid.SetReadOnly(row, col, True)
+            # grid.SetCellEditor(row, col, None)
+            # grid.SetCellRenderer(row, col, None)
+
+            highlight_colours = (wx.WHITE, wx.BLACK)
+            grid.SetCellBackgroundColour(row, col, highlight_colours[0])
+            grid.SetCellTextColour(row, col, highlight_colours[1])
+        grid.ForceRefresh()
         row_highlights = self.Highlights.get(infos[0])
         if row_highlights is not None:
             col_highlights = row_highlights.get(infos[1])
             if col_highlights is not None and highlight_type in col_highlights:
                 col_highlights.remove(highlight_type)
-            if len(col_highlights) == 0:
+            if col_highlights is not None and len(col_highlights) == 0:
                 row_highlights.pop(infos[1])
 
     def ClearHighlights(self, highlight_type=None):
         if highlight_type is None:
             self.Highlights = {}
         else:
-            for _row, row_highlights in self.Highlights.iteritems():
+            for _row, row_highlights in list(self.Highlights.items()):
                 row_items = row_highlights.items()
-                for col, col_highlights in row_items:
+                for col, col_highlights in list(row_items):
                     if highlight_type in col_highlights:
                         col_highlights.remove(highlight_type)
                     if len(col_highlights) == 0:
                         row_highlights.pop(col)
+
+    def sort(self, col, asc):
+        if len(self.data) == 0: return
+        n = self.colnames[col]
+        if n == '#':
+            n = 'Number'
+        if n=='Initial Value':
+            n='InitialValue'
+        if isinstance(self.data[0], _VariableInfos):
+            self.data = sorted(self.data, key=lambda val: getattr(val, n), reverse=not asc)
+        else:
+            self.data = sorted(self.data, key=lambda val: val.get(n), reverse=not asc)
+
+    def filter(self, txt):
+        def ss(obj):
+            i = 0
+            for pr in dir(obj):
+                if isinstance(self.data[0], _VariableInfos):
+                    if pr == 'Number': continue
+                    if isinstance(getattr(obj, pr), str) and txt.lower() in getattr(obj, pr).lower(): i += 1
+                else:
+                    if txt.lower() in obj.get(pr).lower(): i += 1
+            return i
+
+        self.data = sorted(self.data, key=lambda x: ss(x), reverse=True)
+

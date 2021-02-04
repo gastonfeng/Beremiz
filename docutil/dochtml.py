@@ -41,8 +41,8 @@ def OpenHtmlFrame(self, title, file, size):
         window.Show()
 
 
-[ID_HTMLFRAME, ID_HTMLFRAMEHTMLCONTENT] = [wx.NewId() for _init_ctrls in range(2)]
-EVT_HTML_URL_CLICK = wx.NewId()
+[ID_HTMLFRAME, ID_HTMLFRAMEHTMLCONTENT] = [wx.NewIdRef() for _init_ctrls in range(2)]
+EVT_HTML_URL_CLICK = wx.NewIdRef()
 
 
 class HtmlWindowUrlClick(wx.PyEvent):

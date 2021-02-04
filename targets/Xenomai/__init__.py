@@ -21,10 +21,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-
-
-from __future__ import absolute_import
-from ..toolchain_gcc import toolchain_gcc
+from targets.toolchain_gcc import toolchain_gcc
 
 
 class Xenomai_target(toolchain_gcc):
@@ -37,7 +34,7 @@ class Xenomai_target(toolchain_gcc):
         if xeno_config:
             from util.ProcessLogger import ProcessLogger
             status, result, _err_result = ProcessLogger(self.CTRInstance.logger,
-                                                        xeno_config + " --skin=posix --skin=alchemy --no-auto-init --"+flagsname,
+                                                        xeno_config + " --skin=native --" + flagsname,
                                                         no_stdout=True).spin()
             if status:
                 self.CTRInstance.logger.write_error(_("Unable to get Xenomai's %s \n") % flagsname)

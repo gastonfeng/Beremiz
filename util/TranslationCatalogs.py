@@ -23,11 +23,10 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
+import builtins
 import os
-from six.moves import builtins
-import wx
 
+import wx
 
 locale = None
 
@@ -55,9 +54,7 @@ def AddCatalog(locale_dir):
             global locale
             if locale is None:
                 # Define locale for wx
-                wx.LogGui.EnableLogging(False)
-                locale = wx.Locale(wx.LANGUAGE_DEFAULT)
-                wx.LogGui.EnableLogging(True)
+                locale = wx.Locale(wx.LANGUAGE_CHINESE_SIMPLIFIED)
 
             locale.AddCatalogLookupPathPrefix(locale_dir)
             locale.AddCatalog(domain)

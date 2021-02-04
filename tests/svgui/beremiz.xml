@@ -1,5 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <BeremizRoot URI_location="LOCAL://">
-  <TargetType/>
+  <TargetType>
+    <Win32/>
+  </TargetType>
   <Libraries Enable_SVGUI_Library="true" Enable_Python_Library="true"/>
 </BeremizRoot>

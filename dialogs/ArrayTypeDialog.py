@@ -22,7 +22,7 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
+# from __future__ import absolute_import
 import re
 
 import wx
@@ -50,31 +50,31 @@ class ArrayTypeDialog(wx.Dialog):
         main_sizer.AddGrowableRow(1)
 
         top_sizer = wx.BoxSizer(wx.HORIZONTAL)
-        main_sizer.AddSizer(top_sizer, border=20,
-                            flag=wx.GROW | wx.TOP | wx.LEFT | wx.RIGHT)
+        main_sizer.Add(top_sizer, border=20,
+                       flag=wx.GROW | wx.TOP | wx.LEFT | wx.RIGHT)
 
         basetype_label = wx.StaticText(self, label=_('Base Type:'))
-        top_sizer.AddWindow(basetype_label, 1, flag=wx.ALIGN_BOTTOM)
+        top_sizer.Add(basetype_label, 1, flag=wx.ALIGN_BOTTOM)
 
         self.BaseType = wx.ComboBox(self, style=wx.CB_READONLY)
-        top_sizer.AddWindow(self.BaseType, 1, flag=wx.GROW)
+        top_sizer.Add(self.BaseType, 1, flag=wx.GROW)
 
         self.Dimensions = CustomEditableListBox(self, label=_("Dimensions:"),
-                                                style=(wx.gizmos.EL_ALLOW_NEW |
-                                                       wx.gizmos.EL_ALLOW_EDIT |
-                                                       wx.gizmos.EL_ALLOW_DELETE))
+                                                style=(wx.adv.EL_ALLOW_NEW |
+                                                       wx.adv.EL_ALLOW_EDIT |
+                                                       wx.adv.EL_ALLOW_DELETE))
         for func in ["_OnLabelEndEdit",
                      "_OnAddButton",
                      "_OnDelButton",
                      "_OnUpButton",
                      "_OnDownButton"]:
             setattr(self.Dimensions, func, self.OnDimensionsChanged)
-        main_sizer.AddSizer(self.Dimensions, border=20,
-                            flag=wx.GROW | wx.LEFT | wx.RIGHT)
+        main_sizer.Add(self.Dimensions, border=20,
+                       flag=wx.GROW | wx.LEFT | wx.RIGHT)
 
         button_sizer = self.CreateButtonSizer(wx.OK | wx.CANCEL | wx.CENTRE)
-        self.Bind(wx.EVT_BUTTON, self.OnOK, button_sizer.GetAffirmativeButton())
-        main_sizer.AddSizer(button_sizer, border=20,
+        self.Bind(wx.EVT_BUTTON, self.OnOK, id=wx.ID_OK)
+        main_sizer.Add(button_sizer, border=20,
                             flag=wx.ALIGN_RIGHT | wx.BOTTOM | wx.LEFT | wx.RIGHT)
 
         self.SetSizer(main_sizer)
@@ -84,13 +84,13 @@ class ArrayTypeDialog(wx.Dialog):
 
         if isinstance(infos, tuple) and infos[0] == "array":
             self.BaseType.SetStringSelection(infos[1])
-            self.Dimensions.SetStrings(map("..".join, infos[2]))
+            self.Dimensions.SetStrings(list(map("..".join, infos[2])))
         elif infos in datatypes:
             self.BaseType.SetStringSelection(infos)
 
         self.BaseType.SetFocus()
         self.Fit()
-
+        self.CenterOnParent()
     def GetDimensions(self):
         message = None
         dimensions_list = []
@@ -112,7 +112,7 @@ class ArrayTypeDialog(wx.Dialog):
         if message is not None:
             dlg = wx.MessageDialog(self, message, _("Error"), wx.OK | wx.ICON_ERROR)
             dlg.ShowModal()
-            dlg.Destroy()
+            # dlg.Destroy()
             return None
         return dimensions_list
 

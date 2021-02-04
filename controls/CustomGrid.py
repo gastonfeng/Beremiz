@@ -23,7 +23,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 
-from __future__ import absolute_import
 import wx
 import wx.grid
 
@@ -40,6 +39,7 @@ class CustomGrid(wx.grid.Grid):
         self.UpButton = None
         self.DownButton = None
 
+        self.UseNativeColHeader(True)
         self.SetFont(wx.Font(12, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, 'Sans'))
         self.SetLabelFont(wx.Font(10, wx.DEFAULT, wx.NORMAL, wx.NORMAL, False, 'Sans'))
         self.SetSelectionBackground(wx.WHITE)
@@ -49,6 +49,34 @@ class CustomGrid(wx.grid.Grid):
         self.Bind(wx.grid.EVT_GRID_SELECT_CELL, self.OnSelectCell)
         self.Bind(wx.grid.EVT_GRID_EDITOR_HIDDEN, self.OnEditorHidden)
         self.Bind(wx.EVT_KEY_DOWN, self.OnKeyDown)
+        self.Bind(wx.grid.EVT_GRID_COL_SORT, self.OnColClick)
+
+        self.Bind(wx.EVT_KILL_FOCUS, self.onEvt)
+        self.Bind(wx.EVT_DISPLAY_CHANGED, self.onEvt)
+        # self.Bind(wx.EVT_WINDOW_DESTROY, self.onDestroy)
+        self.Bind(wx.EVT_CLOSE, self.onEvt)
+
+    def onEvt(self, event):
+        # print(__class__)
+        # print(event)
+        event.Skip()
+
+    def Destroy(self):
+        return super().Destroy()
+
+    def onDestroy(self, event):
+        event.Skip()
+
+    def OnColClick(self, event):
+        col = event.GetCol()
+        icol = self.GetSortingColumn()
+        if icol == col:
+            asc = self.IsSortOrderAscending()
+        else:
+            asc = True
+        self.Table.sort(col, asc)
+        self.Refresh()
+        self.SetSortingColumn(col, ascending=asc)
 
     def SetFocus(self):
         if self:

@@ -15,7 +15,7 @@
 #include <unistd.h>
 #include "iec_types.h"
 
-int GetRetainSize(void);
+extern "C" int GetRetainSize(void);
 
 /* Retain buffer.  */
 FILE *retain_buffer;
@@ -71,8 +71,8 @@ static const uint32_t crc32_table[256] = {
 	0xB3667A2E, 0xC4614AB8, 0x5D681B02, 0x2A6F2B94, 0xB40BBE37, 0xC30C8EA1, 0x5A05DF1B, 0x2D02EF8D,
 };
 uint32_t retain_crc;
-
-
+extern "C"
+{
 /* Calculate CRC32 for len bytes from pointer buf with init starting value.  */
 uint32_t GenerateCRC32Sum(const void* buf, unsigned int len, uint32_t init)
 {
@@ -137,7 +137,7 @@ void InitRetain(void)
 	   (that's why we divide strlen in two).  */
 	retain_info.hash_size = PLC_ID ? strlen(PLC_ID)/2 : 0;
 	//retain_info.hash_size = 0;
-	retain_info.hash = malloc(retain_info.hash_size);
+	retain_info.hash = (uint8_t*)malloc(retain_info.hash_size);
 
 	/* Transform hash string into byte sequence.  */
 	for (i = 0; i < retain_info.hash_size; i++) {
@@ -321,4 +321,19 @@ void Remind(unsigned int offset, unsigned int count, void *p)
 	fseek(retain_buffer, retain_info.header_offset+offset, SEEK_SET);
 	fread((void *)p, count, 1, retain_buffer);
 }
+int RetainCmp(unsigned int offset, unsigned int count, void *p)
+{
+    char buf[count];
+	fseek(retain_buffer, retain_info.header_offset+offset, SEEK_SET);
+	fread((void *)buf, count, 1, retain_buffer);
+	int res = memcmp(buf, p, count);
+	// memcpy(retain_info.buf + offset, p, count);
+	return res;
+}
+void RetainBufferClose()
+{
+	fclose(retain_buffer);
+}
 #endif // !HAVE_RETAIN
+void startRetainThd(){}
+}

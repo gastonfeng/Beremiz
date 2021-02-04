@@ -7,9 +7,12 @@
 #
 # See COPYING.Runtime file for copyrights details.
 
-from __future__ import absolute_import
+# from __future__ import absolute_import
+import logging
 import sys
+import traceback
 from threading import Lock, Condition
+
 import six
 from six.moves import _thread
 
@@ -33,7 +36,8 @@ class job(object):
             call, args, kwargs = self.job
             self.result = call(*args, **kwargs)
             self.success = True
-        except Exception:
+        except Exception as e:
+            logging.error(traceback.print_exc())
             self.success = False
             self.exc_info = sys.exc_info()
 
@@ -51,6 +55,7 @@ class worker(object):
         self.done = Condition(self.mutex)
         self.free = Condition(self.mutex)
         self.job = None
+        self.enabled = False
 
     def reraise(self, job):
         """

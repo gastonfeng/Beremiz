@@ -21,19 +21,26 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+import wx
 
-
-from __future__ import absolute_import
 from editors.TextViewer import TextViewer
 from plcopen.plcopen import TestTextElement
 
 
 class IECCodeViewer(TextViewer):
 
+    def __init__(self, parent, tagname, window, controler, debug=False, instancepath=""):
+        TextViewer.__init__(self, parent, tagname, window, controler, debug, instancepath)
+        self.Bind(wx.EVT_CLOSE, self.onClose)
+
     def __del__(self):
         TextViewer.__del__(self)
         if getattr(self, "_OnClose"):
             self._OnClose(self)
+
+    def onClose(self, event):
+        self.__del__()
+        event.Skip()
 
     def Paste(self):
         if self.Controler is not None:

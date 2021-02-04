@@ -3,7 +3,7 @@
 
 # See COPYING file for copyrights details.
 
-from __future__ import absolute_import
+# from __future__ import absolute_import
 
 from itertools import repeat, islice, chain
 
@@ -41,3 +41,6 @@ class WAMP_dialog(SchemeEditor):
                    "#{realm}#{ID}"
 
         return template.format(**fields)
+
+    def close(self):
+        pass

@@ -1,6 +1,7 @@
-from __future__ import absolute_import
+# from __future__ import absolute_import
 
 import wx
+
 from connectors import ConnectorSchemes, EditorClassFromScheme
 from controls.DiscoveryPanel import DiscoveryPanel
 
@@ -28,7 +29,7 @@ class UriEditor(wx.Dialog):
         self.Layout()
         self.Fit()
 
-    def __init__(self, parent, ctr, uri=''):
+    def __init__(self, parent, ctr, uri='', service_type='_KT1260._udp.local.'):
         self.ctr = ctr
         wx.Dialog.__init__(self,
                            name='UriEditor', parent=parent,
@@ -38,14 +39,18 @@ class UriEditor(wx.Dialog):
         self._init_sizers()
         self.scheme = None
         self.scheme_editor = None
-        self.SetURI(uri)
+        self.SetURI(uri, service_type)
         self.CenterOnParent()
+
+    def close(self):
+        if self.scheme_editor:
+            self.scheme_editor.close()
 
     def OnTypeChoice(self, event):
         index = event.GetSelection()
         self._replaceSchemeEditor(event.GetString() if index > 0 else None)
 
-    def SetURI(self, uri):
+    def SetURI(self, uri, service_type):
         try:
             scheme, loc = uri.strip().split("://", 1)
             scheme = scheme.upper()
@@ -58,7 +63,7 @@ class UriEditor(wx.Dialog):
             self.UriTypeChoice.SetSelection(0)
             scheme = None
 
-        self._replaceSchemeEditor(scheme)
+        self._replaceSchemeEditor(scheme, service_type)
 
         if scheme is not None:
             self.scheme_editor.SetLoc(loc)
@@ -67,22 +72,23 @@ class UriEditor(wx.Dialog):
         if self.scheme is None:
             return self.scheme_editor.GetURI()
         else:
-            return self.scheme+"://"+self.scheme_editor.GetLoc()
+            return self.scheme + "://" + self.scheme_editor.GetLoc()
 
-    def _replaceSchemeEditor(self, scheme):
+    def _replaceSchemeEditor(self, scheme, service_type='_KT1260._udp.local.'):
         self.scheme = scheme
 
         if self.scheme_editor is not None:
             self.editor_sizer.Detach(self.scheme_editor)
+            self.scheme_editor.close()
             self.scheme_editor.Destroy()
             self.scheme_editor = None
 
-        if scheme is not None:
+        if scheme is not None and scheme not in ['HTTP', 'SOCKET', "TCPLINK", "UDPLINK", "ESPLINK"]:
             EditorClass = EditorClassFromScheme(scheme)
             self.scheme_editor = EditorClass(scheme, self)
         else:
             # None is for searching local network
-            self.scheme_editor = DiscoveryPanel(self)
+            self.scheme_editor = DiscoveryPanel(self, service_type)
 
         self.editor_sizer.Add(self.scheme_editor)
         self.scheme_editor.Refresh()

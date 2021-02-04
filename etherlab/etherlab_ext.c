@@ -19,23 +19,10 @@ See COPYING file for copyrights details.
 #define ANSWERED 2
 
 long SDOLock = FREE;
-extern long AtomicCompareExchange(long* atomicvar,long compared, long exchange);
 
-int AcquireSDOLock() {
-	return AtomicCompareExchange(&SDOLock, FREE, ACQUIRED) == FREE;
-}
 
-void SDOAnswered() {
-	AtomicCompareExchange(&SDOLock, ACQUIRED, ANSWERED);
-}
-
-int HasAnswer() {
-	return SDOLock == ANSWERED;
-}
-
-void ReleaseSDOLock() {
-	AtomicCompareExchange(&SDOLock, ANSWERED, FREE);
-}
+extern "C" {
+long AtomicCompareExchange(long* atomicvar,long compared, long exchange);
 
 int __init_etherlab_ext()
 {
@@ -53,4 +40,21 @@ void __retrieve_etherlab_ext()
 
 void __publish_etherlab_ext()
 {
+}
+}
+
+int AcquireSDOLock() {
+	return AtomicCompareExchange(&SDOLock, FREE, ACQUIRED) == FREE;
+}
+
+void SDOAnswered() {
+	AtomicCompareExchange(&SDOLock, ACQUIRED, ANSWERED);
+}
+
+int HasAnswer() {
+	return SDOLock == ANSWERED;
+}
+
+void ReleaseSDOLock() {
+	AtomicCompareExchange(&SDOLock, ANSWERED, FREE);
 }

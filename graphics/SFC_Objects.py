@@ -21,18 +21,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+import operator
 
-
-from __future__ import absolute_import
-from __future__ import division
-from future.builtins import round
-
-import wx
-from six.moves import xrange
-
-from graphics.GraphicCommons import *
 from graphics.DebugDataConsumer import DebugDataConsumer
-from plcopen.structures import *
+# from six.moves import range
+from graphics.GraphicCommons import *
 
 
 def GetWireSize(block):
@@ -238,8 +231,8 @@ class SFC_Step(Graphic_Element, DebugDataConsumer):
         horizontal_pos = self.Size[0] // 2
         vertical_pos = self.Size[1] // 2
         if scaling is not None:
-            horizontal_pos = round((self.Pos.x + horizontal_pos) / scaling[0]) * scaling[0] - self.Pos.x
-            vertical_pos = round((self.Pos.y + vertical_pos) / scaling[1]) * scaling[1] - self.Pos.y
+            horizontal_pos = round(float(self.Pos.x + horizontal_pos) / float(scaling[0])) * scaling[0] - self.Pos.x
+            vertical_pos = round(float(self.Pos.y + vertical_pos) / float(scaling[1])) * scaling[1] - self.Pos.y
         # Update input position if it exists
         if self.Input:
             self.Input.SetPosition(wx.Point(horizontal_pos, 0))
@@ -466,8 +459,8 @@ class SFC_Step(Graphic_Element, DebugDataConsumer):
             movex = max(-self.BoundingBox.x, movex)
             movey = max(-self.BoundingBox.y, movey)
             if scaling is not None:
-                movex = round((self.Pos.x + movex) / scaling[0]) * scaling[0] - self.Pos.x
-                movey = round((self.Pos.y + movey) / scaling[1]) * scaling[1] - self.Pos.y
+                movex = round(float(self.Pos.x + movex) / float(scaling[0])) * scaling[0] - self.Pos.x
+                movey = round(float(self.Pos.y + movey) / float(scaling[1])) * scaling[1] - self.Pos.y
             if self.Parent.GetDrawingMode() == FREEDRAWING_MODE:
                 self.Move(movex, movey)
                 self.RefreshConnected()
@@ -719,7 +712,7 @@ class SFC_Transition(Graphic_Element, DebugDataConsumer):
                                self.Pos.y + (self.Size[1] - text_height) // 2,
                                text_width,
                                text_height)
-            test_text = text_bbx.InsideXY(pt.x, pt.y)
+            test_text = text_bbx.Contains(pt.x, pt.y)
         else:
             test_text = False
         return test_text or Graphic_Element.HitTest(self, pt, connectors)
@@ -762,8 +755,8 @@ class SFC_Transition(Graphic_Element, DebugDataConsumer):
         horizontal_pos = self.Size[0] // 2
         vertical_pos = self.Size[1] // 2
         if scaling is not None:
-            horizontal_pos = round((self.Pos.x + horizontal_pos) / scaling[0]) * scaling[0] - self.Pos.x
-            vertical_pos = round((self.Pos.y + vertical_pos) / scaling[1]) * scaling[1] - self.Pos.y
+            horizontal_pos = round(float(self.Pos.x + horizontal_pos) / float(scaling[0])) * scaling[0] - self.Pos.x
+            vertical_pos = round(float(self.Pos.y + vertical_pos) / float(scaling[1])) * scaling[1] - self.Pos.y
         # Update input position
         self.Input.SetPosition(wx.Point(horizontal_pos, 0))
         # Update output position
@@ -920,7 +913,7 @@ class SFC_Transition(Graphic_Element, DebugDataConsumer):
         if self.Parent.GetDrawingMode() != FREEDRAWING_MODE:
             movex = max(-self.BoundingBox.x, movex)
             if scaling is not None:
-                movex = round((self.Pos.x + movex) / scaling[0]) * scaling[0] - self.Pos.x
+                movex = round(float(self.Pos.x + movex) / float(scaling[0])) * scaling[0] - self.Pos.x
             self.Move(movex, 0)
             self.RefreshInputPosition()
             self.RefreshOutputPosition()
@@ -1037,7 +1030,7 @@ class SFC_Transition(Graphic_Element, DebugDataConsumer):
             self.Condition.Draw(dc)
 
         if not getattr(dc, "printing", False):
-            for name, highlights in self.Highlights.iteritems():
+            for name, highlights in self.Highlights.items():
                 if name == "priority":
                     DrawHighlightedText(dc, str(self.Priority), highlights, priority_pos[0], priority_pos[1])
                 else:
@@ -1067,11 +1060,11 @@ class SFC_Divergence(Graphic_Element):
         if self.Type in [SELECTION_DIVERGENCE, SIMULTANEOUS_DIVERGENCE]:
             self.Inputs = [Connector(self, "", None, wx.Point(self.Size[0] // 2, 0), NORTH, onlyone=True)]
             self.Outputs = []
-            for i in xrange(number):
+            for i in range(number):
                 self.Outputs.append(Connector(self, "", None, wx.Point(i * SFC_DEFAULT_SEQUENCE_INTERVAL, self.Size[1]), SOUTH, onlyone=True))
         elif self.Type in [SELECTION_CONVERGENCE, SIMULTANEOUS_CONVERGENCE]:
             self.Inputs = []
-            for i in xrange(number):
+            for i in range(number):
                 self.Inputs.append(Connector(self, "", None, wx.Point(i * SFC_DEFAULT_SEQUENCE_INTERVAL, 0), NORTH, onlyone=True))
             self.Outputs = [Connector(self, "", None, wx.Point(self.Size[0] // 2, self.Size[1]), SOUTH, onlyone=True)]
         self.Value = None
@@ -1124,7 +1117,7 @@ class SFC_Divergence(Graphic_Element):
         return divergence
 
     def GetConnectorTranslation(self, element):
-        return dict(zip(self.Inputs + self.Outputs, element.Inputs + element.Outputs))
+        return dict(list(zip(self.Inputs + self.Outputs, element.Inputs + element.Outputs)))
 
     # Returns the RedrawRect
     def GetRedrawRect(self, movex=0, movey=0):
@@ -1204,7 +1197,7 @@ class SFC_Divergence(Graphic_Element):
 
     # Returns if the point given is in the bounding box
     def HitTest(self, pt, connectors=True):
-        return self.BoundingBox.InsideXY(pt.x, pt.y) or self.TestConnector(pt, exclude=False) is not None
+        return self.BoundingBox.Contains(pt.x, pt.y) or self.TestConnector(pt, exclude=False) is not None
 
     # Refresh the divergence bounding box
     def RefreshBoundingBox(self):
@@ -1244,8 +1237,8 @@ class SFC_Divergence(Graphic_Element):
             for output in self.Outputs:
                 output_pos = output.GetRelPosition()
                 output.SetPosition(wx.Point(output_pos.x - minx, output_pos.y))
-        self.Inputs.sort(lambda x, y: cmp(x.Pos.x, y.Pos.x))
-        self.Outputs.sort(lambda x, y: cmp(x.Pos.x, y.Pos.x))
+        self.Inputs.sort(lambda x, y: operator.eq(x.Pos.x, y.Pos.x))
+        self.Outputs.sort(lambda x, y: operator.eq(x.Pos.x, y.Pos.x))
         self.Pos.x += minx
         self.Size[0] = maxx - minx
         connector.MoveConnected()
@@ -1288,14 +1281,14 @@ class SFC_Divergence(Graphic_Element):
             if self.RealConnectors:
                 input.SetPosition(wx.Point(int(round(self.RealConnectors["Inputs"][i] * width)), 0))
             else:
-                input.SetPosition(wx.Point(int(round(position.x*width / self.Size[0])), 0))
+                input.SetPosition(wx.Point(int(round(float(position.x) * float(width) / float(self.Size[0]))), 0))
             input.MoveConnected()
         for i, output in enumerate(self.Outputs):
             position = output.GetRelPosition()
             if self.RealConnectors:
                 output.SetPosition(wx.Point(int(round(self.RealConnectors["Outputs"][i] * width)), height))
             else:
-                output.SetPosition(wx.Point(int(round(position.x*width / self.Size[0])), height))
+                output.SetPosition(wx.Point(int(round(float(position.x) * float(width) / float(self.Size[0]))), height))
             output.MoveConnected()
         self.Size = wx.Size(width, height)
         self.RefreshBoundingBox()
@@ -1371,10 +1364,10 @@ class SFC_Divergence(Graphic_Element):
         self.RealConnectors = {"Inputs": [], "Outputs": []}
         for input in self.Inputs:
             position = input.GetRelPosition()
-            self.RealConnectors["Inputs"].append(position.x / self.Size[0])
+            self.RealConnectors["Inputs"].append(float(position.x) / float(self.Size[0]))
         for output in self.Outputs:
             position = output.GetRelPosition()
-            self.RealConnectors["Outputs"].append(position.x / self.Size[0])
+            self.RealConnectors["Outputs"].append(float(position.x) / float(self.Size[0]))
         Graphic_Element.OnLeftDown(self, event, dc, scaling)
 
     # Method called when a LeftUp event have been generated
@@ -1428,7 +1421,7 @@ class SFC_Divergence(Graphic_Element):
         if handle_type == HANDLE_CONNECTOR:
             movex = max(-self.BoundingBox.x, movex)
             if scaling is not None:
-                movex = round((self.Pos.x + movex) / scaling[0]) * scaling[0] - self.Pos.x
+                movex = round(float(self.Pos.x + movex) / float(scaling[0])) * scaling[0] - self.Pos.x
             self.MoveConnector(handle, movex)
             if self.Parent.GetDrawingMode() != FREEDRAWING_MODE:
                 self.RefreshConnectedPosition(handle)
@@ -1592,7 +1585,7 @@ class SFC_Jump(Graphic_Element):
                            self.Pos.y + (self.Size[1] - text_height) // 2,
                            text_width,
                            text_height)
-        return text_bbx.InsideXY(pt.x, pt.y) or Graphic_Element.HitTest(self, pt, connectors)
+        return text_bbx.Contains(pt.x, pt.y) or Graphic_Element.HitTest(self, pt, connectors)
 
     # Refresh the jump bounding box
     def RefreshBoundingBox(self):
@@ -1614,7 +1607,7 @@ class SFC_Jump(Graphic_Element):
         scaling = self.Parent.GetScaling()
         horizontal_pos = self.Size[0] // 2
         if scaling is not None:
-            horizontal_pos = round((self.Pos.x + horizontal_pos) / scaling[0]) * scaling[0] - self.Pos.x
+            horizontal_pos = round(float(self.Pos.x + horizontal_pos) / float(scaling[0])) * scaling[0] - self.Pos.x
         self.Input.SetPosition(wx.Point(horizontal_pos, 0))
         self.RefreshConnected()
 
@@ -1688,7 +1681,7 @@ class SFC_Jump(Graphic_Element):
         if self.Parent.GetDrawingMode() != FREEDRAWING_MODE:
             movex = max(-self.BoundingBox.x, movex)
             if scaling is not None:
-                movex = round((self.Pos.x + movex) / scaling[0]) * scaling[0] - self.Pos.x
+                movex = round(float(self.Pos.x + movex) / float(scaling[0])) * scaling[0] - self.Pos.x
             self.Move(movex, 0)
             self.RefreshInputPosition()
             return movex, 0
@@ -1894,7 +1887,7 @@ class SFC_ActionBlock(Graphic_Element):
         scaling = self.Parent.GetScaling()
         vertical_pos = SFC_ACTION_MIN_SIZE[1] // 2
         if scaling is not None:
-            vertical_pos = round((self.Pos.y + vertical_pos) / scaling[1]) * scaling[1] - self.Pos.y
+            vertical_pos = round(float(self.Pos.y + vertical_pos) / float(scaling[1])) * scaling[1] - self.Pos.y
         self.Input.SetPosition(wx.Point(0, vertical_pos))
         self.RefreshConnected()
 
@@ -1965,7 +1958,7 @@ class SFC_ActionBlock(Graphic_Element):
             if handle_type == HANDLE_MOVE:
                 movex = max(-self.BoundingBox.x, movex)
                 if scaling is not None:
-                    movex = round((self.Pos.x + movex) / scaling[0]) * scaling[0] - self.Pos.x
+                    movex = round(float(self.Pos.x + movex) / float(scaling[0])) * scaling[0] - self.Pos.x
                 wires = self.Input.GetWires()
                 if len(wires) == 1:
                     input_pos = wires[0][0].GetOtherConnected(self.Input).GetPosition(False)
@@ -2058,7 +2051,7 @@ class SFC_ActionBlock(Graphic_Element):
 
             if not getattr(dc, "printing", False):
                 action_highlights = self.Highlights.get(i, {})
-                for name, attribute_highlights in action_highlights.iteritems():
+                for name, attribute_highlights in action_highlights.items():
                     if name == "qualifier":
                         DrawHighlightedText(dc, action.qualifier, attribute_highlights, qualifier_pos[0], qualifier_pos[1])
                     elif name == "duration":
