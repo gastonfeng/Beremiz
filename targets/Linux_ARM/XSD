@@ -1,0 +1,9 @@
+      <xsd:element name="Linux_ARM">
+        <xsd:complexType>
+          <xsd:attribute name="Compiler" type="xsd:string" use="optional" default="arm-linux-gnueabihf-gcc"/>
+          <xsd:attribute name="CFLAGS" type="xsd:string" use="optional" default="-I../arm-linux-gnueabihf/usr/include -D_GNU_SOURCE -D_REENTRANT -Wall -pipe"/>
+          <xsd:attribute name="Linker" type="xsd:string" use="optional" default="arm-linux-gnueabihf-gcc"/>
+          <xsd:attribute name="LDFLAGS" type="xsd:string" use="optional" default="-lpthread -lethercat"/>
+          <xsd:attribute name="LinuxConfig" type="xsd:string" use="optional"/>
+        </xsd:complexType>
+      </xsd:element>
