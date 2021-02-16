@@ -4,6 +4,8 @@ import traceback
 from os.path import exists
 
 import wx
+from pyocd.core.helpers import ConnectHelper
+from pyocd.flash.file_programmer import FileProgrammer
 from serial.tools import list_ports
 
 from LogPseudoFile import LogPseudoFile
@@ -92,7 +94,8 @@ class ProgEditor(wx.Dialog):
         wx.Dialog.__init__(self,
                            name='ProgEditor', parent=parent,
                            title=_('Prog with Serial'))
-        ports = [d.device for d in list_ports.comports()]
+        ports = [d.product_name for d in ConnectHelper.get_all_connected_probes(blocking=False)] + [d.device for d in
+                                                                                                    list_ports.comports()]
 
         self.choices = ports + [_('ESP-Link')]
         self._init_ctrls(parent)
@@ -212,6 +215,8 @@ class ProgEditor(wx.Dialog):
             # scheme, location = uri.split("://")
             ip, port = location.split(':')
             threading.Thread(target=self.netFlash, args=[ip], name='netFLash').start()
+        elif Serial == 'STM32 STLink':
+            threading.Thread(target=self.stlinkFlash, args=[], name="STLink").start()
         else:
             threading.Thread(target=self.serialFlash, args=[Serial, self.boot, self.reset], name='serialFlash').start()
 
@@ -260,6 +265,32 @@ class ProgEditor(wx.Dialog):
                 stm.erase_blocks(self.BlkApp)
                 stm.write_file(self.adrApp, self.appBin, verify=self.verify)
             stm.exit_bootloader()
+            self.Log.write(_('Flash end.'))
+        except Exception as e:
+            self.Log.write_error(_('Error:%s') % str(e))
+            self.Log.write_error(_('Flash Failed.'))
+
+    def stlinkFlash(self):
+        self.Log.write(" Flash PLC use STLink\n")
+        try:
+            with ConnectHelper.session_with_chosen_probe() as session:
+                target = session.target
+                # todo:stlink read cpu id
+                # if self.dev_id and stm._dev_id != self.dev_id:
+                #     self.Log.write_error(_("MCU ID Don't Match!"))
+                #     return
+                if self.prgBoot.IsChecked():
+                    self.Log.write(_('Flash BootLoader ...'))
+                    with FileProgrammer(session, chip_erase='auto', smart_flash=True) as programmer:
+                        programmer.program(self.bootbin, file_format='bin', base_address=0x8000000)
+                if self.prgRte.IsChecked():
+                    self.Log.write(_('Flash RTE firmware ...'))
+                    with FileProgrammer(session, chip_erase='auto', smart_flash=True) as programmer:
+                        programmer.program(self.rtebin, file_format='bin', base_address=self.adrRte)
+                if self.prgApp.IsChecked():
+                    self.Log.write(_('Flash PLC APP ...'))
+                    with FileProgrammer(session, chip_erase='auto', smart_flash=True) as programmer:
+                        programmer.program(self.appBin, file_format='bin', base_address=self.adrApp)
             self.Log.write(_('Flash end.'))
         except Exception as e:
             self.Log.write_error(_('Error:%s') % str(e))

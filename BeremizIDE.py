@@ -34,14 +34,11 @@ from asyncio import get_event_loop
 from concurrent.futures import CancelledError
 from queue import Empty
 
-import aiohttp_cors
 import aioprocessing
 import wx.lib.buttons
 import wx.lib.statbmp
 import wx.stc
 from aiohttp import web
-from aiohttp_graphql import GraphQLView
-from graphql.execution.executors.asyncio import AsyncioExecutor
 
 import Beremiz_version
 from APPVersion import appchannel
@@ -76,7 +73,6 @@ from mywork.qtbase.configini import configini
 from oem import oem
 from plcopen.types_enums import LOCATION_CONFNODE, LOCATION_MODULE, LOCATION_GROUP, LOCATION_VAR_INPUT, \
     LOCATION_VAR_OUTPUT, LOCATION_VAR_MEMORY, ITEM_RESOURCE, ITEM_PROJECT, ComputeConfigurationName
-from schema import schema
 from util import paths as paths
 from util.BitmapLibrary import GetBitmap
 from util.MiniTextControler import MiniTextControler
@@ -462,31 +458,6 @@ class Beremiz(IDEFrame):
         self.RefreshAll()
         self.LogConsole.SetFocus()
         loop = get_event_loop()
-        self.startWeb(loop)
-
-    def startWeb(self, loop):
-
-        self.app = web.Application(loop=loop)
-        # GraphQLView.attach(app,schema=schema,graphiql=True)
-        gql_view = GraphQLView(schema=schema, graphiql=True, executor=AsyncioExecutor(loop=loop), )
-        self.app.router.add_route('GET', '/graphql', gql_view, name='graphql')
-        post = self.app.router.add_route('POST', '/graphql', gql_view, name='graphql')
-        cors = aiohttp_cors.setup(
-            self.app,
-            defaults={
-                "*": aiohttp_cors.ResourceOptions(
-                    allow_credentials=True,
-                    expose_headers="*",
-                    allow_headers="*",
-                )
-            }
-        )
-        cors.add(post)
-        self.app.add_routes(routes)
-        static = self.app.router.add_static("/", os.path.join(application_path, 'dist'), show_index=True)
-        static = self.app.router.add_static("/help", os.path.join(application_path, 'kvpac_beremiz', 'dist'),
-                                            show_index=True)
-        StartCoroutine(web._run_app(self.app, port=65000), self)
 
     def __del__(self):
         self.app.shutdown()
@@ -653,8 +624,6 @@ class Beremiz(IDEFrame):
     async def TryCloseFrame(self):
         if self.CTR is None or self.CheckSaveBeforeClosing(_("Close Application")):
             self.running = False
-            await self.app.shutdown()
-            await self.app.cleanup()
             # self.updateCmd.close()
             # self.queueData.close()
             # self.updater.terminate()
@@ -662,7 +631,6 @@ class Beremiz(IDEFrame):
             # StartCoroutine(self.app.shutdown,self)
             # sleep(1)
             # StartCoroutine(self.app.cleanup,self)
-            self.app = None
             if self.CTR is not None:
                 self.CTR.KillDebugThread()
             self.KillLocalRuntime()
