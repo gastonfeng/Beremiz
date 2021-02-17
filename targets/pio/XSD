@@ -1,7 +1,0 @@
-
-<xsd:element name="pio">
-    <xsd:complexType>
-        %(toolchain_pio)s
-        <xsd:attribute name="ONLINE_DEBUG" type="xsd:boolean"  default="true"/>
-    </xsd:complexType>
-</xsd:element>

@@ -1,2 +1,0 @@
-<xsd:attribute name="LOCAL_PACKAGE" type="xsd:boolean" use="optional" default="true"/>
-<xsd:attribute name="optimization" type="xsd:boolean" use="optional" default="true"/>

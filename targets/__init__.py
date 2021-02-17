@@ -57,8 +57,7 @@ targets = dict([(name, {"xsd": path.join(_base_path, name, "XSD"),
                 if (path.isdir(path.join(_base_path, name)) and
                     not name.startswith("__"))])
 
-toolchains = {"gcc": path.join(_base_path, "XSD_toolchain_gcc"), "pio": path.join(_base_path, "XSD_toolchain_pio"),
-              "makefile": path.join(_base_path, "XSD_toolchain_makefile")}
+toolchains = {"gcc": path.join(_base_path, "XSD_toolchain_gcc"),               "makefile": path.join(_base_path, "XSD_toolchain_makefile")}
 
 
 def GetBuilder(targetname):

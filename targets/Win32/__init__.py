@@ -21,22 +21,12 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
-from targets.toolchain_pio import toolchain_pio
+from targets.toolchain_gcc import toolchain_gcc
 
 
-class Win32_target(toolchain_pio):
+class Win32_target(toolchain_gcc):
     dlopen_prefix = ""
     extension = ".dll"
-    platform = 'https://gitee.com/kaikong/platform-windows_amd64.git'
-    framework = ''
-    board = ''
-    build_flags = ['-Dwindows_x86', '-DPLC_WIN', '-D HWMODEL=\\"Native\\"', '-DONLINE_DEBUG',
-                   '-I.pio/libdeps/kvpac/iec_type']
-    exe = 'program.dll'
-    static = False
-    libs = ['plc_app']
 
-    def getBoard(self):
-        pass
-    def getPlatform(self):
-        return self.platform
+    def getBuilderLDFLAGS(self):
+        return toolchain_gcc.getBuilderLDFLAGS(self) + ["-shared", "-lwinmm"]
