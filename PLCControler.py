@@ -30,7 +30,6 @@ from copy import deepcopy
 from time import localtime
 
 from PLCGenerator import *
-from beremiz.util import paths
 from graphics.GraphicCommons import *
 from plcopen import *
 from plcopen.BlockInstanceCollector import BlockInstanceCollector
@@ -43,6 +42,7 @@ from plcopen.types_enums import ITEM_PROJECT, DATA_TYPES, ITEM_DATATYPES, FUNCTI
     ACTIONS, CONFIGURATIONS, ITEM_CONFIGURATIONS, RESOURCES, ITEM_RESOURCES, ITEM_RESOURCE, ITEM_ACTIONS, \
     ITEM_TRANSITIONS, ComputePouName, ComputePouTransitionName, ComputePouActionName, ITEM_CONFIGURATION, \
     ComputeConfigurationName, ComputeConfigurationResourceName, ComputeDataTypeName, VAR_CLASS_INFOS, USER_DEFINED_POUS
+from util import paths
 
 duration_model = re.compile(
     r"(?:([0-9]{1,2})h)?(?:([0-9]{1,2})m(?!s))?(?:([0-9]{1,2})s)?(?:([0-9]{1,3}(?:\.[0-9]*)?)ms)?")
