@@ -69,12 +69,14 @@ class CustomTree(CT.CustomTreeCtrl):
         self.BackgroundBitmap = bitmap
         self.BackgroundAlign = align
 
-    def SetImageListCheck(self, sizex, sizey, imglist=None):
+    def SetImageListCheck(self, sizex: int, sizey: int, imglist: list = None):
         CT.CustomTreeCtrl.SetImageListCheck(self, sizex, sizey, imglist=None)
 
         self.ExtraImages = {}
         for image in ["function", "functionBlock", "program"]:
-            self.ExtraImages[image] = self._imageListCheck.Add(GetBitmap(image.upper()))
+            img = GetBitmap(image.upper())
+            assert img
+            self.ExtraImages[image] = self._imageListCheck.Add(img)
 
     def SetItemExtraImage(self, item, bitmap):
         dc = wx.ClientDC(self)

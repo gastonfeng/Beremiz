@@ -68,7 +68,7 @@ class LocationCellControl(wx.Control):
     def onEVT_MOUSE_CAPTURE_LOST(self, event):
         if self.HasCapture():
             self.ReleaseMouse()
-        event.Skip()
+        # event.Skip()
 
     # def __del__(self):
     #     self.Controller = None

@@ -271,8 +271,8 @@ def get_standard_funtions(table):
 
     return Standard_Functions_Decl
 
-
-StdBlckLst.extend(get_standard_funtions(csv_file_to_table(open(StdFuncsCSV))))
+for csv in StdFuncsCSV:
+    StdBlckLst.extend(get_standard_funtions(csv_file_to_table(open(csv))))
 
 # Dictionary to speedup block type fetching by name
 StdBlckDct = OrderedDict()

@@ -24,9 +24,6 @@
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 import wx
-from wx.lib.scrolledpanel import ScrolledPanel
-
-from xmlclass.xmlclass import URI_model
 
 # -------------------------------------------------------------------------------
 #                                 Helpers
@@ -176,15 +173,6 @@ class ProjectPropertiesPanel(wx.Notebook):
                 scalingpanel_sizer.Add(sp, border=10,
                                        flag=wx.GROW | border | wx.RIGHT)
 
-            st = wx.StaticText(scaling_panel, label=_('show Doc'))
-            scalingpanel_sizer.Add(
-                st, border=10,
-                flag=wx.ALIGN_CENTER_VERTICAL | wx.BOTTOM | wx.LEFT)
-            showDoc = wx.CheckBox(scaling_panel, style=wx.TE_PROCESS_ENTER)
-            callback = self.GetScalingChangedFunction(showDoc, language, 'showDoc')
-            showDoc.Bind(wx.EVT_CHECKBOX, callback)
-            scaling_controls.append(showDoc)
-            scalingpanel_sizer.Add(showDoc, border=10, flag=wx.GROW | wx.BOTTOM | wx.RIGHT)
 
             self.Scalings[language] = scaling_controls
 
@@ -253,11 +241,10 @@ class ProjectPropertiesPanel(wx.Notebook):
                 self.PageWidth.SetValue(value[0])
                 self.PageHeight.SetValue(value[1])
             elif item == "scaling":
-                for language, (x, y, show) in value.items():
+                for language, (x, y) in value.items():
                     if language in self.Scalings:
                         self.Scalings[language][0].SetValue(x)
                         self.Scalings[language][1].SetValue(y)
-                        self.Scalings[language][2].SetValue(show)
             else:
                 tc = getattr(self, item, None)
                 if tc is not None:

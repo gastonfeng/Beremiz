@@ -872,7 +872,7 @@ class Viewer(EditorPanel, DebugViewer):
     def onEVT_MOUSE_CAPTURE_LOST(self, event):
         if self.Editor.HasCapture():
             self.Editor.ReleaseMouse()
-        event.Skip()
+        # event.Skip()
 
     # Destructor
     def __del__(self):

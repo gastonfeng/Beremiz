@@ -50,8 +50,9 @@ class BeremizIDELauncher(object):
         self.updateinfo_url = None
         self.extensions = []
         self.app_dir = paths.AbsDir(__file__)
-        if hasattr(sys, 'frozen'):
-            self.app_dir = os.path.join(self.app_dir, '..')
+        # if hasattr(sys, 'frozen'):
+        #     self.app_dir = os.path.join(self.app_dir, '..')
+        # print(self.app_dir)
         self.projectOpen = None
         self.buildpath = None
         self.splash = None

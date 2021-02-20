@@ -70,6 +70,12 @@ class EditorPanel(wx.SplitterWindow):
         self.Debug = debug
 
         self._init_ctrls(parent)
+        self.Bind(wx.EVT_MOUSE_CAPTURE_LOST, self.onEVT_MOUSE_CAPTURE_LOST)
+
+    def onEVT_MOUSE_CAPTURE_LOST(self, event):
+        if self.Editor.HasCapture():
+            self.Editor.ReleaseMouse()
+        # event.Skip()
 
     def onClose(self, event):
         if self.VariableEditor is not None:

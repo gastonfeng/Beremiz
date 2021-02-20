@@ -177,9 +177,9 @@ LOAD_POU_PROJECT_TEMPLATE = """
               creationDateTime="1970-01-01T00:00:00"/>
   <contentHeader name="paste_project">
     <coordinateInfo>
-      <fbd><scaling x="10" y="10" showDoc="1"/></fbd>
-      <ld><scaling x="10" y="10" showDoc="1"/></ld>
-      <sfc><scaling x="10" y="10" showDoc="1"/></sfc>
+      <fbd><scaling x="10" y="10" /></fbd>
+      <ld><scaling x="10" y="10" /></ld>
+      <sfc><scaling x="10" y="10" /></sfc>
     </coordinateInfo>
   </contentHeader>
   <types>
@@ -326,13 +326,13 @@ def LoadPouInstances(xml_string, body_type):
 
 def SaveProject(project, filepath):
     project_file = open(filepath, 'w', encoding='utf-8')
-    txt = etree.tostring(
+    content = etree.tostring(
         project,
         pretty_print=True,
         xml_declaration=True,
         encoding='utf-8').decode()
 
-    project_file.write(txt)
+    project_file.write(content)
     project_file.close()
 
 
@@ -675,9 +675,8 @@ def _updateContentHeaderProjectClass(cls):
     setattr(cls, "getpageSize", getpageSize)
 
     def setscaling(self, scaling):
-        for language, (x, y, show) in scaling.items():
-            self.coordinateInfo.setscaling(language, x, y, show)
-
+        for language, (x, y) in scaling.items():
+            self.coordinateInfo.setscaling(language, x, y)
     setattr(cls, "setscaling", setscaling)
 
     def getscaling(self):
@@ -688,21 +687,6 @@ def _updateContentHeaderProjectClass(cls):
         return scaling
 
     setattr(cls, "getscaling", getscaling)
-
-    def setshowdoc(self, showdoc):
-        for language, value in showdoc:
-            self.coordinateInfo.setshowdoc(language, value)
-
-    setattr(cls, 'setshowdoc', setshowdoc)
-
-    def getshowdoc(self):
-        showdoc = {}
-        showdoc["FBD"] = self.coordinateInfo.getshowdoc("FBD")
-        showdoc["LD"] = self.coordinateInfo.getshowdoc("LD")
-        showdoc["SFC"] = self.coordinateInfo.getshowdoc("SFC")
-        return showdoc
-
-    setattr(cls, "getshowdoc", getshowdoc)
 
 
 cls = PLCOpenParser.GetElementClass("contentHeader", "project")
@@ -732,29 +716,25 @@ def _updateCoordinateInfoContentHeaderClass(cls):
 
     setattr(cls, "getpageSize", getpageSize)
 
-    def setscaling(self, language, x, y, show):
+    def setscaling(self, language, x, y):
         if language == "FBD":
             self.fbd.scaling.setx(x)
             self.fbd.scaling.sety(y)
-            self.fbd.scaling.setshowDoc(show)
         elif language == "LD":
             self.ld.scaling.setx(x)
             self.ld.scaling.sety(y)
-            self.ld.scaling.setshowDoc(show)
         elif language == "SFC":
             self.sfc.scaling.setx(x)
             self.sfc.scaling.sety(y)
-            self.sfc.scaling.setshowDoc(show)
-
     setattr(cls, "setscaling", setscaling)
 
     def getscaling(self, language):
         if language == "FBD":
-            return self.fbd.scaling.getx(), self.fbd.scaling.gety(), self.fbd.scaling.getshowDoc()
+            return self.fbd.scaling.getx(), self.fbd.scaling.gety()
         elif language == "LD":
-            return self.ld.scaling.getx(), self.ld.scaling.gety(), self.ld.scaling.getshowDoc()
+            return self.ld.scaling.getx(), self.ld.scaling.gety()
         elif language == "SFC":
-            return self.sfc.scaling.getx(), self.sfc.scaling.gety(), self.sfc.scaling.getshowDoc()
+            return self.sfc.scaling.getx(), self.sfc.scaling.gety()
         return 0, 0
 
     setattr(cls, "getscaling", getscaling)
