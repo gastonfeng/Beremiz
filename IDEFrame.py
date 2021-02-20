@@ -32,8 +32,6 @@ import wx.grid
 
 from APPVersion import appchannel
 from PLCControler import *
-# Define PLCOpenEditor controls id
-from beremiz.graphics.GraphicCommons import ERROR_HIGHLIGHT, SEARCH_RESULT_HIGHLIGHT
 from controls import CustomTree, LibraryPanel, PouInstanceVariablesPanel
 from controls.DebugVariablePanel import DebugVariablePanel
 from controls.SearchResultPanel import SearchResultPanel
@@ -45,6 +43,8 @@ from editors.ResourceEditor import ConfigurationEditor, ResourceEditor
 from editors.SFCViewer import SFC_Viewer
 from editors.TextViewer import TextViewer
 from editors.Viewer import Viewer, ZOOM_FACTORS
+# Define PLCOpenEditor controls id
+from graphics.GraphicCommons import ERROR_HIGHLIGHT, SEARCH_RESULT_HIGHLIGHT
 from plcopen.types_enums import *
 from util.BitmapLibrary import GetBitmap
 from util.ProcessLogger import ProcessLogger
