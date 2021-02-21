@@ -225,7 +225,7 @@ def LoadProjectXML(project_xml):
         "http://www.plcopen.org/xml/tc6_0201")
     for cre, repl in [
         (re.compile(r"(?<!<xhtml:p>)(?:<!\[CDATA\[)"), "<xhtml:p><![CDATA["),
-        (re.compile(r"(?:]]>)(?!</xhtml:p>)"), "]]></xhtml:p>")]:
+        (re.compile(r"(?:]]>)(?!</xhtml:p>)"), "]]></xhtml:p>")]:  # ]]>(?:\s+<\/xhtml:p>)
         project_xml = cre.sub(repl, project_xml)
 
     try:
