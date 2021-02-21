@@ -294,6 +294,7 @@ def LoadProjectXML(project_xml):
         return tree, error
 
     except Exception as e:
+        print(e)
         return None, str(e)
 
 
