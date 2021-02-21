@@ -87,6 +87,6 @@ def GetBitmap(bmp_name1, bmp_name2=None, size=None):
     if bmp is not None:
         BitmapLibrary[(bmp_name1, bmp_name2, size)] = bmp
     else:
-        raise Exception('not found %s.png with %s' % (bmp_name1, BitmapFolders))
+        print('not found %s.png with %s' % (bmp_name1, BitmapFolders))
 
     return bmp

@@ -2788,6 +2788,7 @@ class PLCControler(object):
     def OpenXMLFile(self, filepath):
         self.Project, error = LoadProject(filepath)
         if self.Project is None:
+            print(_("Project file syntax error:\n\n") + error)
             return _("Project file syntax error:\n\n") + error
         self.SetFilePath(filepath)
         self.CreateProjectBuffer(True)

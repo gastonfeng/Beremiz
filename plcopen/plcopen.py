@@ -325,13 +325,14 @@ def LoadPouInstances(xml_string, body_type):
 
 
 def SaveProject(project, filepath):
-    project_file = open(filepath, 'w', encoding='utf-8')
     content = etree.tostring(
         project,
         pretty_print=True,
         xml_declaration=True,
         encoding='utf-8').decode()
 
+    assert len(content) != 0
+    project_file = open(filepath, 'w', encoding='utf-8')
     project_file.write(content)
     project_file.close()
 
