@@ -537,7 +537,7 @@ class ProjectController(ConfigTreeNode, PLCControler):
             if result:
                 return result, False
             # Load and init all the children
-            self.LoadChildren()
+        self.LoadChildren()
         self.RefreshConfNodesBlockLists()
         self.UpdateButtons()
         return None, False
@@ -2024,21 +2024,25 @@ class ProjectController(ConfigTreeNode, PLCControler):
     async def _coConnect(self):
         # don't accept re-connetion if already connected
         self.logger.flush()
-        target = self.GetTarget().getcontent().getLocalTag()
-        if target == 'pio':
-            board = self.GetChildByName('board_0')
-            if not board:
-                self.logger.write_error(_('Can not Found "board_0",Please attach one board.'))
-                raise Exception
-            node = board.GetBoardFile()
-            model = node['class']
-            if not model:
-                self.logger.write_error(_("PLC Board Unknown"))
-            self.rts = model.prog_boot
-            self.dtr = model.prog_reset
-        if self._connector is not None:
-            self.logger.write_error(
-                _("Already connected. Please disconnect\n"))
+        try:
+            target = self.GetTarget().getcontent().getLocalTag()
+            if target == 'pio':
+                board = self.GetChildByName('board_0')
+                if not board:
+                    self.logger.write_error(_('Can not Found "board_0",Please attach one board.'))
+                    raise Exception
+                node = board.GetBoardFile()
+                model = node['class']
+                if not model:
+                    self.logger.write_error(_("PLC Board Unknown"))
+                self.rts = model.prog_boot
+                self.dtr = model.prog_reset
+            if self._connector is not None:
+                self.logger.write_error(
+                    _("Already connected. Please disconnect\n"))
+                return
+        except Exception as ex:
+            self.logger.write_error(str(ex))
             return
 
         # Get connector uri
