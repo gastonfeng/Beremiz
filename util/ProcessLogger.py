@@ -59,7 +59,7 @@ class outputThread(Thread):
             else:
                 self.retval = self.Proc.returncode
 
-            outchunk = self.fd.readline()
+            outchunk = self.fd.readline().decode('gbk').encode('utf-8')
             if self.callback:
                 self.callback(outchunk)
         while outchunk != b'' and not self.killed:
