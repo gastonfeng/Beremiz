@@ -39,7 +39,6 @@ import Pyro4
 from past.builtins import execfile
 
 from runtime import PlcStatus, MainWorker, GetPLCObjectSingleton, CreatePLCObjectSingleton, default_evaluator
-
 from runtime.Stunnel import getPSKID
 from runtime.loglevels import LogLevelsCount, LogLevelsDefault
 from runtime.typemapping import TypeTranslator
@@ -766,7 +765,7 @@ class PLCObject(object):
 if __name__ == '__main__':
     faulthandler.enable()
     plc = CreatePLCObjectSingleton('D:/kvpac/beremiz/tests/first_steps/.pio/build/plcapp', [], None, None, {})
-    b = open('D:/kvpac/beremiz/tests/first_steps/.pio/build/plcapp/program.dll', 'rb').read()
+    b = open('//tests/first_steps/.pio/build/plcapp/program.dll', 'rb').read()
     # plc.NewPLC('progg', b, [])
     # plc.StartPLC()
     autostart = True
