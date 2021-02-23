@@ -65,5 +65,5 @@ def InstallLocalRessources(CWD):
     # Internationalization
     AddCatalog(os.path.join(CWD, "locale"))
     ## windows7环境下，执行代码报ValueError: embedded null byte时，在原代码前面加一行代码：locale.setlocale(locale.LC_ALL,'en')即可解决
-    locale.setlocale(locale.LC_ALL, 'en')
-    locale.setlocale(locale.LC_CTYPE, 'chinese')
+    locale.setlocale(locale.LC_ALL, 'en_US.UTF-8')
+    locale.setlocale(locale.LC_CTYPE, 'zh_CN.UTF-8')
