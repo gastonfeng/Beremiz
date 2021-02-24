@@ -31,12 +31,11 @@ This module contains classes extended from wx.Dialog used by the GUI.
 """
 
 # from __future__ import absolute_import
-import os
 
 import wx
 
 from APPVersion import appchannel
-from mywork import configini
+from mywork.qtbase.configini import configini
 
 
 class AboutDialog(wx.Dialog):
