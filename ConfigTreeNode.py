@@ -41,7 +41,6 @@ from operator import add
 
 import wx
 from lxml import etree
-from past.builtins import execfile
 
 from editors.ConfTreeNodeEditor import ConfTreeNodeEditor
 from plcopen.types_enums import LOCATION_CONFNODE
@@ -636,7 +635,7 @@ class ConfigTreeNode(object):
     def LoadXMLParams(self, CTNName=None):
         methode_name = os.path.join(self.CTNPath(CTNName), "methods.py")
         if os.path.isfile(methode_name):
-            execfile(methode_name)
+            exec(open(methode_name).read())
 
         ConfNodeName = CTNName if CTNName is not None else self.CTNName()
 
