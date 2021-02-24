@@ -68,7 +68,8 @@ from editors.EditorPanel import EditorPanel
 from editors.ResourceEditor import ConfigurationEditor, ResourceEditor
 from editors.TextViewer import TextViewer
 from editors.Viewer import Viewer
-from mywork.qtbase.appUpdaterClient import startcoUpdater
+if sys.platform=='win32':
+    from mywork.qtbase.appUpdaterClient import startcoUpdater
 from mywork.qtbase.configini import configini
 from oem import oem
 from plcopen.types_enums import LOCATION_CONFNODE, LOCATION_MODULE, LOCATION_GROUP, LOCATION_VAR_INPUT, \
@@ -336,7 +337,8 @@ class Beremiz(IDEFrame):
         self.ProgressStatusBar.Hide()
         self.btnUpdate.Hide()
         self.SetStatusBar(self.ConnectionStatusBar)
-        self.startUpdater(self.mpUpdater)
+        if sys.platform=='win32':
+            self.startUpdater(self.mpUpdater)
 
     def startUpdater(self, mpUpdater):
         queueCmd = aioprocessing.AioQueue()

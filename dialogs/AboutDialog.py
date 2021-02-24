@@ -36,7 +36,7 @@ import os
 import wx
 
 from APPVersion import appchannel
-from mywork.qtbase.configini import configini
+from mywork import configini
 
 
 class AboutDialog(wx.Dialog):
@@ -196,7 +196,4 @@ class LicenseDialog(wx.Dialog):
 
 
 def ShowAboutDialog(parent, info):
-    if os.name == "nt":
-        AboutDialog(parent, info)
-    else:
-        wx.AboutBox(info)
+    AboutDialog(parent, info)
