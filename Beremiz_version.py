@@ -29,6 +29,7 @@ import sys
 
 import util.paths as paths
 from APPVersion import appversion
+from oem import oem
 
 
 def GetCommunityHelpMsg():
@@ -81,7 +82,7 @@ def GetAboutDialogInfo():
     import wx
     info = wx.adv.AboutDialogInfo()
 
-    info.Name = "NetPac"
+    info.Name = oem.title
     info.Version = app_version
 
     info.Copyright = ""
